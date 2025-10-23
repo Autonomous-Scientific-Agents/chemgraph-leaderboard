@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from enum import Enum
 
+
 @dataclass
 class Task:
     benchmark: str
@@ -11,13 +12,13 @@ class Task:
 # Select your tasks here
 # ---------------------------------------------------
 class Tasks(Enum):
-    # task_key in the json file, metric_key in the json file, name to display in the leaderboard 
-    task0 = Task("anli_r1", "acc", "ANLI")
-    task1 = Task("logiqa", "acc_norm", "LogiQA")
+    # task_key in the json file, metric_key in the json file, name to display in the leaderboard
+    task0 = Task("exp1", "accuracy", "name2smi")
+    task1 = Task("exp2", "accuracy", "name2coord")
 
-NUM_FEWSHOT = 0 # Change with your few shot
+
+NUM_FEWSHOT = 0  # Change with your few shot
 # ---------------------------------------------------
-
 
 
 # Your leaderboard name
