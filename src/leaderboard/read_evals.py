@@ -14,22 +14,22 @@ from src.submission.check_validity import is_model_on_hub
 
 @dataclass
 class EvalResult:
-    """Represents one full evaluation. Built from a combination of the result and request file for a given run.
-    """
-    eval_name: str # org_model_precision (uid)
-    full_model: str # org/model (path on hub)
-    org: str 
+    """Represents one full evaluation. Built from a combination of the result and request file for a given run."""
+
+    eval_name: str  # org_model_precision (uid)
+    full_model: str  # org/model (path on hub)
+    org: str
     model: str
-    revision: str # commit hash, "" if main
+    revision: str  # commit hash, "" if main
     results: dict
     precision: Precision = Precision.Unknown
-    model_type: ModelType = ModelType.Unknown # Pretrained, fine tuned, ...
-    weight_type: WeightType = WeightType.Original # Original or Adapter
-    architecture: str = "Unknown" 
+    model_type: ModelType = ModelType.Unknown  # Pretrained, fine tuned, ...
+    weight_type: WeightType = WeightType.Original  # Original or Adapter
+    architecture: str = "Unknown"
     license: str = "?"
     likes: int = 0
     num_params: int = 0
-    date: str = "" # submission date of request file
+    date: str = ""  # submission date of request file
     still_on_hub: bool = False
 
     @classmethod
@@ -58,7 +58,10 @@ class EvalResult:
         full_model = "/".join(org_and_model)
 
         still_on_hub, _, model_config = is_model_on_hub(
-            full_model, config.get("model_sha", "main"), trust_remote_code=True, test_tokenizer=False
+            full_model,
+            config.get("model_sha", "main"),
+            trust_remote_code=True,
+            test_tokenizer=False,
         )
         architecture = "?"
         if model_config is not None:
@@ -72,7 +75,9 @@ class EvalResult:
             task = task.value
 
             # We average all scores of a given metric (not all metrics are present in all files)
-            accs = np.array([v.get(task.metric, None) for k, v in data["results"].items() if task.benchmark == k])
+            accs = np.array([
+                v.get(task.metric, None) for k, v in data["results"].items() if task.benchmark == k
+            ])
             if accs.size == 0 or any([acc is None for acc in accs]):
                 continue
 
@@ -85,15 +90,17 @@ class EvalResult:
             org=org,
             model=model,
             results=results,
-            precision=precision,  
-            revision= config.get("model_sha", ""),
+            precision=precision,
+            revision=config.get("model_sha", ""),
             still_on_hub=still_on_hub,
-            architecture=architecture
+            architecture=architecture,
         )
 
     def update_with_request_file(self, requests_path):
         """Finds the relevant request file for the current model and updates info with it"""
-        request_file = get_request_file_for_model(requests_path, self.full_model, self.precision.value.name)
+        request_file = get_request_file_for_model(
+            requests_path, self.full_model, self.precision.value.name
+        )
 
         try:
             with open(request_file, "r") as f:
@@ -105,7 +112,9 @@ class EvalResult:
             self.num_params = request.get("params", 0)
             self.date = request.get("submitted_time", "")
         except Exception:
-            print(f"Could not find request file for {self.org}/{self.model} with precision {self.precision.value.name}")
+            print(
+                f"Could not find request file for {self.org}/{self.model} with precision {self.precision.value.name}"
+            )
 
     def to_dict(self):
         """Converts the Eval Result to a dict compatible with our dataframe display"""
@@ -171,8 +180,8 @@ def get_raw_eval_results(results_path: str, requests_path: str) -> list[EvalResu
 
         for file in files:
             model_result_filepaths.append(os.path.join(root, file))
-
     eval_results = {}
+    print(f"MODEL FILE PATHS: {model_result_filepaths}")
     for model_result_filepath in model_result_filepaths:
         # Creation of result
         eval_result = EvalResult.init_from_json_file(model_result_filepath)
@@ -181,14 +190,16 @@ def get_raw_eval_results(results_path: str, requests_path: str) -> list[EvalResu
         # Store results of same eval together
         eval_name = eval_result.eval_name
         if eval_name in eval_results.keys():
-            eval_results[eval_name].results.update({k: v for k, v in eval_result.results.items() if v is not None})
+            eval_results[eval_name].results.update({
+                k: v for k, v in eval_result.results.items() if v is not None
+            })
         else:
             eval_results[eval_name] = eval_result
 
     results = []
     for v in eval_results.values():
         try:
-            v.to_dict() # we test if the dict version is complete
+            v.to_dict()  # we test if the dict version is complete
             results.append(v)
         except KeyError:  # not all eval values present
             continue

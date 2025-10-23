@@ -15,6 +15,19 @@ class Tasks(Enum):
     # task_key in the json file, metric_key in the json file, name to display in the leaderboard
     task0 = Task("exp1", "accuracy", "name2smi")
     task1 = Task("exp2", "accuracy", "name2coord")
+    task2 = Task("exp3", "accuracy", "name2opt")
+    task3 = Task("exp4", "accuracy", "name2vib")
+    task4 = Task("exp5", "accuracy", "name2gibbs")
+    task5 = Task("exp6", "accuracy", "name2file")
+    task6 = Task("exp7", "accuracy", "smi2coord")
+    task7 = Task("exp8", "accuracy", "smi2opt")
+    task8 = Task("exp9", "accuracy", "smi2vib")
+    task9 = Task("exp10", "accuracy", "smi2gibbs")
+    task10 = Task("exp11", "accuracy", "smi2file")
+    task11 = Task("exp12", "accuracy", "react2enthalpy")
+    task12 = Task("exp13", "accuracy", "react2gibbs")
+    task13 = Task("exp14", "accuracy", "react2enthalpy_multiagent")
+    task14 = Task("exp15", "accuracy", "react2gibbs_multiagent")
 
 
 NUM_FEWSHOT = 0  # Change with your few shot
@@ -22,11 +35,21 @@ NUM_FEWSHOT = 0  # Change with your few shot
 
 
 # Your leaderboard name
-TITLE = """<h1 align="center" id="space-title">Demo leaderboard</h1>"""
+TITLE = """<h1 align="center" id="space-title">ChemGraph Leaderboard</h1>"""
 
 # What does your leaderboard evaluate?
 INTRODUCTION_TEXT = """
-Intro text
+ChemGraph Leaderboard provides a reproducible evaluation of **agentic AI frameworks and large language models (LLMs)** for computational chemistry and materials science.
+
+This leaderboard benchmarks models on a diverse set of tasks, including:
+- Molecular geometry optimization, vibration analysis, and thermochemistry estimation.
+- Reaction thermodynamics prediction (enthalpy, Gibbs free energy)  .
+- Tool-usage accuracy in multi-agent workflows.
+
+Each model’s score reflects its ability to **follow structured tool protocols, generate physically meaningful results, and reason across chemistry-specific contexts**.  
+The benchmark results are generated offline and uploaded as part of the [**ChemGraph paper**](https://arxiv.org/abs/2506.06363).
+
+Use this leaderboard to explore how different models and agents perform across core chemistry tasks, from small-molecule modeling to multi-step reaction workflows.
 """
 
 # Which evaluations are you running? how can people reproduce what you have?
@@ -70,4 +93,11 @@ If everything is done, check you can launch the EleutherAIHarness on your model 
 
 CITATION_BUTTON_LABEL = "Copy the following snippet to cite these results"
 CITATION_BUTTON_TEXT = r"""
+@article{pham2025chemgraph,
+title={ChemGraph: An Agentic Framework for Computational Chemistry Workflows},
+author={Pham, Thang D and Tanikanti, Aditya and Keçeli, Murat},
+journal={arXiv preprint arXiv:2506.06363},
+year={2025}
+url={https://arxiv.org/abs/2506.06363}
+}
 """

@@ -22,9 +22,17 @@ from src.display.utils import (
     ModelType,
     fields,
     WeightType,
-    Precision
+    Precision,
 )
-from src.envs import API, EVAL_REQUESTS_PATH, EVAL_RESULTS_PATH, QUEUE_REPO, REPO_ID, RESULTS_REPO, TOKEN
+from src.envs import (
+    API,
+    EVAL_REQUESTS_PATH,
+    EVAL_RESULTS_PATH,
+    QUEUE_REPO,
+    REPO_ID,
+    RESULTS_REPO,
+    TOKEN,
+)
 from src.populate import get_evaluation_queue_df, get_leaderboard_df
 from src.submission.submit import add_new_eval
 
@@ -32,30 +40,42 @@ from src.submission.submit import add_new_eval
 def restart_space():
     API.restart_space(repo_id=REPO_ID)
 
+
 ### Space initialisation
 try:
     print(EVAL_REQUESTS_PATH)
     snapshot_download(
-        repo_id=QUEUE_REPO, local_dir=EVAL_REQUESTS_PATH, repo_type="dataset", tqdm_class=None, etag_timeout=30, token=TOKEN
+        repo_id=QUEUE_REPO,
+        local_dir=EVAL_REQUESTS_PATH,
+        repo_type="dataset",
+        tqdm_class=None,
+        etag_timeout=30,
+        token=TOKEN,
     )
 except Exception:
     restart_space()
 try:
     print(EVAL_RESULTS_PATH)
     snapshot_download(
-        repo_id=RESULTS_REPO, local_dir=EVAL_RESULTS_PATH, repo_type="dataset", tqdm_class=None, etag_timeout=30, token=TOKEN
+        repo_id=RESULTS_REPO,
+        local_dir=EVAL_RESULTS_PATH,
+        repo_type="dataset",
+        tqdm_class=None,
+        etag_timeout=30,
+        token=TOKEN,
     )
 except Exception:
     restart_space()
 
-
 LEADERBOARD_DF = get_leaderboard_df(EVAL_RESULTS_PATH, EVAL_REQUESTS_PATH, COLS, BENCHMARK_COLS)
+LEADERBOARD_DF["T"] = range(1, len(LEADERBOARD_DF) + 1)
 
 (
     finished_eval_queue_df,
     running_eval_queue_df,
     pending_eval_queue_df,
 ) = get_evaluation_queue_df(EVAL_REQUESTS_PATH, EVAL_COLS)
+
 
 def init_leaderboard(dataframe):
     if dataframe is None or dataframe.empty:
@@ -81,7 +101,10 @@ def init_leaderboard(dataframe):
                 label="Select the number of parameters (B)",
             ),
             ColumnFilter(
-                AutoEvalColumn.still_on_hub.name, type="boolean", label="Deleted/incomplete", default=True
+                AutoEvalColumn.still_on_hub.name,
+                type="boolean",
+                label="Deleted/incomplete",
+                default=False,
             ),
         ],
         bool_checkboxgroup_label="Hide models",
@@ -171,7 +194,9 @@ with demo:
                         value="Original",
                         interactive=True,
                     )
-                    base_model_name_textbox = gr.Textbox(label="Base model (for delta or adapter weights)")
+                    base_model_name_textbox = gr.Textbox(
+                        label="Base model (for delta or adapter weights)"
+                    )
 
             submit_button = gr.Button("Submit Eval")
             submission_result = gr.Markdown()
