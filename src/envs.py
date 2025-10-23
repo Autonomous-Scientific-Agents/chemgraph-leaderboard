@@ -9,7 +9,7 @@ TOKEN = os.environ.get("HF_TOKEN")  # A read/write token for your org
 OWNER = "Autonomous-Scientific-Agents"  # Change to your org - don't forget to create a results and request dataset, with the correct format!
 # ----------------------------------
 
-REPO_ID = f"{OWNER}/leaderboard"
+REPO_ID = f"{OWNER}/chemgraph-leaderboard"
 QUEUE_REPO = f"{OWNER}/requests"
 RESULTS_REPO = f"{OWNER}/results"
 
