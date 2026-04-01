@@ -8,18 +8,23 @@ from src.display.utils import AutoEvalColumn, EvalQueueColumn
 from src.leaderboard.read_evals import get_raw_eval_results
 
 
-def get_leaderboard_df(
-    results_path: str, requests_path: str, cols: list, benchmark_cols: list
-) -> pd.DataFrame:
+def get_leaderboard_df(results_path: str, requests_path: str, cols: list, benchmark_cols: list) -> pd.DataFrame:
     """Creates a dataframe from all the individual experiment results"""
     raw_data = get_raw_eval_results(results_path, requests_path)
     all_data_json = [v.to_dict() for v in raw_data]
+
+    if not all_data_json:
+        # Return an empty DataFrame with the expected columns so the app
+        # can still render without crashing.
+        print("WARNING: No valid evaluation results found. Leaderboard will be empty.")
+        return pd.DataFrame(columns=cols)
+
     df = pd.DataFrame.from_records(all_data_json)
     df = df.sort_values(by=[AutoEvalColumn.average.name], ascending=False)
     df = df[cols].round(decimals=2)
 
     # filter out if any of the benchmarks have not been produced
-    df = df[has_no_nan_values(df, benchmark_cols)]
+    # df = df[has_no_nan_values(df, benchmark_cols)]
     return df
 
 
@@ -41,9 +46,7 @@ def get_evaluation_queue_df(save_path: str, cols: list) -> list[pd.DataFrame]:
         elif ".md" not in entry:
             # this is a folder
             sub_entries = [
-                e
-                for e in os.listdir(f"{save_path}/{entry}")
-                if os.path.isfile(e) and not e.startswith(".")
+                e for e in os.listdir(f"{save_path}/{entry}") if os.path.isfile(e) and not e.startswith(".")
             ]
             for sub_entry in sub_entries:
                 file_path = os.path.join(save_path, entry, sub_entry)
@@ -55,11 +58,9 @@ def get_evaluation_queue_df(save_path: str, cols: list) -> list[pd.DataFrame]:
                 all_evals.append(data)
 
     pending_list = [e for e in all_evals if e["status"] in ["PENDING", "RERUN"]]
-    running_list = [e for e in all_evals if e["status"] == "RUNNING"]
+    running_list = [e for e in all_evals if e["status"] in ["RUNNING", "running"]]
     finished_list = [
-        e
-        for e in all_evals
-        if e["status"].startswith("FINISHED") or e["status"] == "PENDING_NEW_EVAL"
+        e for e in all_evals if e["status"].startswith("FINISHED") or e["status"] in ["completed", "PENDING_NEW_EVAL"]
     ]
     df_pending = pd.DataFrame.from_records(pending_list, columns=cols)
     df_running = pd.DataFrame.from_records(running_list, columns=cols)

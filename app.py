@@ -1,3 +1,5 @@
+import sys
+
 import gradio as gr
 from gradio_leaderboard import Leaderboard, ColumnFilter, SelectColumns
 import pandas as pd
@@ -36,39 +38,46 @@ from src.envs import (
 from src.populate import get_evaluation_queue_df, get_leaderboard_df
 from src.submission.submit import add_new_eval
 
+# --local flag: skip HF Hub downloads and scheduler, use local data only.
+LOCAL_MODE = "--local" in sys.argv
+
 
 def restart_space():
     API.restart_space(repo_id=REPO_ID)
 
 
 ### Space initialisation
-try:
-    print(EVAL_REQUESTS_PATH)
-    snapshot_download(
-        repo_id=QUEUE_REPO,
-        local_dir=EVAL_REQUESTS_PATH,
-        repo_type="dataset",
-        tqdm_class=None,
-        etag_timeout=30,
-        token=TOKEN,
-    )
-except Exception:
-    restart_space()
-try:
-    print(EVAL_RESULTS_PATH)
-    snapshot_download(
-        repo_id=RESULTS_REPO,
-        local_dir=EVAL_RESULTS_PATH,
-        repo_type="dataset",
-        tqdm_class=None,
-        etag_timeout=30,
-        token=TOKEN,
-    )
-except Exception:
-    restart_space()
+if not LOCAL_MODE:
+    try:
+        print(EVAL_REQUESTS_PATH)
+        snapshot_download(
+            repo_id=QUEUE_REPO,
+            local_dir=EVAL_REQUESTS_PATH,
+            repo_type="dataset",
+            tqdm_class=None,
+            etag_timeout=30,
+            token=TOKEN,
+        )
+    except Exception:
+        restart_space()
+    try:
+        print(EVAL_RESULTS_PATH)
+        snapshot_download(
+            repo_id=RESULTS_REPO,
+            local_dir=EVAL_RESULTS_PATH,
+            repo_type="dataset",
+            tqdm_class=None,
+            etag_timeout=30,
+            token=TOKEN,
+        )
+    except Exception:
+        restart_space()
+else:
+    print("LOCAL MODE: skipping HF Hub downloads, using local eval-results/ and eval-queue/")
 
 LEADERBOARD_DF = get_leaderboard_df(EVAL_RESULTS_PATH, EVAL_REQUESTS_PATH, COLS, BENCHMARK_COLS)
-LEADERBOARD_DF["T"] = range(1, len(LEADERBOARD_DF) + 1)
+if not LEADERBOARD_DF.empty:
+    LEADERBOARD_DF["T"] = range(1, len(LEADERBOARD_DF) + 1)
 
 (
     finished_eval_queue_df,
@@ -79,7 +88,8 @@ LEADERBOARD_DF["T"] = range(1, len(LEADERBOARD_DF) + 1)
 
 def init_leaderboard(dataframe):
     if dataframe is None or dataframe.empty:
-        raise ValueError("Leaderboard DataFrame is empty or None.")
+        # Show an empty leaderboard instead of crashing.
+        dataframe = pd.DataFrame(columns=COLS)
     return Leaderboard(
         value=dataframe,
         datatype=[c.type for c in fields(AutoEvalColumn)],
@@ -194,9 +204,7 @@ with demo:
                         value="Original",
                         interactive=True,
                     )
-                    base_model_name_textbox = gr.Textbox(
-                        label="Base model (for delta or adapter weights)"
-                    )
+                    base_model_name_textbox = gr.Textbox(label="Base model (for delta or adapter weights)")
 
             submit_button = gr.Button("Submit Eval")
             submission_result = gr.Markdown()
@@ -223,7 +231,9 @@ with demo:
                 show_copy_button=True,
             )
 
-scheduler = BackgroundScheduler()
-scheduler.add_job(restart_space, "interval", seconds=1800)
-scheduler.start()
+if not LOCAL_MODE:
+    scheduler = BackgroundScheduler()
+    scheduler.add_job(restart_space, "interval", seconds=1800)
+    scheduler.start()
+
 demo.queue(default_concurrency_limit=40).launch()
