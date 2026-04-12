@@ -9,20 +9,24 @@ class Task:
     col_name: str
 
 
-# 8 task categories derived from the 14 ChemGraph ground-truth queries.
-# Each category groups related queries; accuracy is averaged within
-# the group by the transform script (scripts/chemgraph_to_leaderboard.py).
+# 12 task categories matching the ``category`` field in ChemGraph benchmark
+# judge details.  Each category's accuracy is averaged within the group by
+# the transform script (scripts/chemgraph_to_leaderboard.py).
 # ---------------------------------------------------
 class Tasks(Enum):
     # benchmark key in results JSON, metric key, display column name
-    task0 = Task("smi_lookup", "accuracy", "SMILES Lookup")
-    task1 = Task("coord_gen", "accuracy", "Coordinate Gen")
-    task2 = Task("geom_opt", "accuracy", "Geometry Opt")
-    task3 = Task("vib_freq", "accuracy", "Vib Frequency")
-    task4 = Task("thermo", "accuracy", "Thermochem")
-    task5 = Task("dipole", "accuracy", "Dipole")
-    task6 = Task("energy", "accuracy", "Energy")
-    task7 = Task("react_gibbs", "accuracy", "Reaction Gibbs")
+    task0 = Task("smiles_lookup", "accuracy", "SMILES Lookup")
+    task1 = Task("optimization_from_name", "accuracy", "Opt (Name)")
+    task2 = Task("optimization_from_smiles", "accuracy", "Opt (SMILES)")
+    task3 = Task("vibrations_from_name", "accuracy", "Vib (Name)")
+    task4 = Task("vibrations_from_smiles", "accuracy", "Vib (SMILES)")
+    task5 = Task("thermochemistry_from_name", "accuracy", "Thermo (Name)")
+    task6 = Task("thermochemistry_from_smiles", "accuracy", "Thermo (SMILES)")
+    task7 = Task("dipole_from_name", "accuracy", "Dipole (Name)")
+    task8 = Task("dipole_from_smiles", "accuracy", "Dipole (SMILES)")
+    task9 = Task("energy_from_name", "accuracy", "Energy (Name)")
+    task10 = Task("energy_from_smiles", "accuracy", "Energy (SMILES)")
+    task11 = Task("reaction_energy", "accuracy", "Reaction Energy")
 
 
 NUM_FEWSHOT = 0  # Change with your few shot
@@ -36,21 +40,25 @@ TITLE = """<h1 align="center" id="space-title">ChemGraph Leaderboard</h1>"""
 INTRODUCTION_TEXT = """
 ChemGraph Leaderboard provides a reproducible evaluation of **agentic AI frameworks and large language models (LLMs)** for computational chemistry and materials science.
 
-Models are evaluated daily on **14 chemistry queries** grouped into **8 task categories**:
+Models are evaluated daily on **40 chemistry queries** grouped into **12 task categories**:
 
 | Category | Queries | Description |
 |----------|---------|-------------|
-| **SMILES Lookup** | 2 | Convert molecule names to SMILES strings |
-| **Coordinate Gen** | 2 | Generate 3D coordinates from SMILES |
-| **Geometry Opt** | 1 | Geometry optimization with DFT/ML potentials |
-| **Vib Frequency** | 1 | Vibrational frequency analysis |
-| **Thermochem** | 1 | Thermochemical properties (enthalpy, entropy, Gibbs) |
-| **Dipole** | 1 | Dipole moment calculation |
-| **Energy** | 3 | Single-point energy and geometry opt with JSON extraction |
-| **Reaction Gibbs** | 3 | Reaction Gibbs free energy for multi-step workflows |
+| **SMILES Lookup** | 4 | Convert molecule names to SMILES strings |
+| **Opt (Name)** | 4 | Geometry optimization from molecule name |
+| **Opt (SMILES)** | 2 | Geometry optimization from SMILES |
+| **Vib (Name)** | 2 | Vibrational frequency from molecule name |
+| **Vib (SMILES)** | 2 | Vibrational frequency from SMILES |
+| **Thermo (Name)** | 4 | Thermochemistry from molecule name |
+| **Thermo (SMILES)** | 2 | Thermochemistry from SMILES |
+| **Dipole (Name)** | 2 | Dipole moment from molecule name |
+| **Dipole (SMILES)** | 2 | Dipole moment from SMILES |
+| **Energy (Name)** | 4 | Single-point energy from molecule name |
+| **Energy (SMILES)** | 2 | Single-point energy from SMILES |
+| **Reaction Energy** | 10 | Reaction Gibbs free energy calculation |
 
 Each model's score reflects its ability to **follow structured tool protocols, generate physically meaningful results, and reason across chemistry-specific contexts**.
-Results are scored by an LLM judge with binary accuracy (correct/incorrect) and 5% relative tolerance for numerical values.
+Results are scored by a structured judge via JSON output for evaluation with binary accuracy (correct/incorrect) and 5% relative tolerance for numerical values.
 
 Use this leaderboard to explore how different models and agents perform across core chemistry tasks, from small-molecule modeling to multi-step reaction workflows.
 """
@@ -61,10 +69,10 @@ LLM_BENCHMARKS_TEXT = f"""
 
 Models are evaluated using the [ChemGraph](https://github.com/Autonomous-Scientific-Agents/ChemGraph) evaluation framework.
 Each model runs as a **single-agent** workflow, invoking chemistry tools (SMILES lookup, coordinate generation, ASE simulations)
-to answer 14 ground-truth queries. An LLM judge then scores each answer as correct or incorrect.
+to answer 40 ground-truth queries. A structured judge then scores each answer as correct or incorrect.
 
 Results are updated daily via an automated pipeline that:
-1. Runs `chemgraph eval` against all configured models
+1. Runs `chemgraph-eval` against all configured models
 2. Transforms the benchmark results into leaderboard format
 3. Pushes updated results to the HF Hub datasets
 
@@ -76,11 +84,7 @@ To reproduce the evaluation locally:
 pip install chemgraph
 
 # Run evaluation
-chemgraph eval \\
-    --models gpt4o gpt52 claudeopus46 \\
-    --judge-model claudeopus46 \\
-    --workflows single_agent \\
-    --config config.toml
+chemgraph-eval --models gpt4o gpt54 --judge-type structured --config config.toml
 
 # Transform results for the leaderboard
 python scripts/chemgraph_to_leaderboard.py \\
@@ -104,7 +108,7 @@ structured tool calls for chemistry operations (SMILES lookup, coordinate genera
 ASE simulations).
 
 ### 3) Check API rate limits
-The evaluation runs 14 queries per model, each potentially requiring multiple tool calls.
+The evaluation runs 40 queries per model, each potentially requiring multiple tool calls.
 Ensure your API key has sufficient quota for the evaluation run.
 
 ## In case of model failure
@@ -116,11 +120,15 @@ If your model appears in the `FAILED` category, check that:
 
 CITATION_BUTTON_LABEL = "Copy the following snippet to cite these results"
 CITATION_BUTTON_TEXT = r"""
-@article{pham2025chemgraph,
-title={ChemGraph: An Agentic Framework for Computational Chemistry Workflows},
-author={Pham, Thang D and Tanikanti, Aditya and Ke\c{c}eli, Murat},
-journal={arXiv preprint arXiv:2506.06363},
-year={2025}
-url={https://arxiv.org/abs/2506.06363}
+@article{pham_chemgraph_2026,
+  title = {{ChemGraph} as an agentic framework for computational chemistry workflows},
+  url = {https://doi.org/10.1038/s42004-025-01776-9},
+  doi = {10.1038/s42004-025-01776-9},
+  author = {Pham, Thang D. and Tanikanti, Aditya and Ke\c{c}eli, Murat},
+  date = {2026-01-08},
+  author={Pham, Thang D and Tanikanti, Aditya and Ke{\c{c}}eli, Murat},
+  journal={Communications Chemistry},
+  year={2026},
+  publisher={Nature Publishing Group UK London}
 }
 """

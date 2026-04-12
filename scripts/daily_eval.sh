@@ -78,6 +78,12 @@ echo "  Output:      $EVAL_OUTPUT_DIR"
 echo ""
 echo "[Step 2/2] Transforming results and pushing to HF Hub..."
 
+# Clean staging directories so only this run's files are uploaded.
+# The ETL now uses date-indexed filenames (results_YYYY-MM-DD.json) and
+# per-file additive uploads, so old files on the Hub are never deleted.
+echo "  Cleaning staging directories..."
+rm -rf "$RESULTS_OUTDIR" "$REQUESTS_OUTDIR"
+
 python "$LEADERBOARD_DIR/scripts/chemgraph_to_leaderboard.py" \
     --eval-dir "$EVAL_OUTPUT_DIR" \
     --model-map "$MODEL_MAP" \

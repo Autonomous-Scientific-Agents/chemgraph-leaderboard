@@ -9,6 +9,7 @@ huggingface-hub>=0.18.0
 matplotlib
 numpy
 pandas
+plotly
 python-dateutil
 tqdm
 transformers

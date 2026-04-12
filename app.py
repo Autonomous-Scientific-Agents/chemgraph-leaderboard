@@ -3,6 +3,7 @@ import sys
 import gradio as gr
 from gradio_leaderboard import Leaderboard, ColumnFilter, SelectColumns
 import pandas as pd
+import plotly.express as px
 from apscheduler.schedulers.background import BackgroundScheduler
 from huggingface_hub import snapshot_download
 
@@ -35,7 +36,7 @@ from src.envs import (
     RESULTS_REPO,
     TOKEN,
 )
-from src.populate import get_evaluation_queue_df, get_leaderboard_df
+from src.populate import get_evaluation_queue_df, get_leaderboard_df, get_trend_summary_df, get_trend_history_df
 from src.submission.submit import add_new_eval
 
 # --local flag: skip HF Hub downloads and scheduler, use local data only.
@@ -79,11 +80,60 @@ LEADERBOARD_DF = get_leaderboard_df(EVAL_RESULTS_PATH, EVAL_REQUESTS_PATH, COLS,
 if not LEADERBOARD_DF.empty:
     LEADERBOARD_DF["T"] = range(1, len(LEADERBOARD_DF) + 1)
 
-(
-    finished_eval_queue_df,
-    running_eval_queue_df,
-    pending_eval_queue_df,
-) = get_evaluation_queue_df(EVAL_REQUESTS_PATH, EVAL_COLS)
+# Load trend data for the Trends tab
+try:
+    TREND_SUMMARY_DF = get_trend_summary_df(EVAL_RESULTS_PATH, EVAL_REQUESTS_PATH)
+    TREND_HISTORY_DF = get_trend_history_df(EVAL_RESULTS_PATH, EVAL_REQUESTS_PATH)
+except Exception as e:
+    print(f"WARNING: Failed to load trend data: {e}")
+    TREND_SUMMARY_DF = pd.DataFrame()
+    TREND_HISTORY_DF = pd.DataFrame()
+
+try:
+    (
+        finished_eval_queue_df,
+        running_eval_queue_df,
+        pending_eval_queue_df,
+    ) = get_evaluation_queue_df(EVAL_REQUESTS_PATH, EVAL_COLS)
+except Exception as e:
+    print(f"WARNING: Failed to load evaluation queue: {e}")
+    _empty_queue = pd.DataFrame(columns=EVAL_COLS)
+    finished_eval_queue_df = _empty_queue
+    running_eval_queue_df = _empty_queue.copy()
+    pending_eval_queue_df = _empty_queue.copy()
+
+
+def build_trend_chart(history_df: pd.DataFrame):
+    """Build a Plotly line chart showing model scores over time."""
+    if history_df.empty:
+        fig = px.line(title="No historical data available yet")
+        fig.update_layout(
+            xaxis_title="Date",
+            yaxis_title="Average Score (%)",
+        )
+        return fig
+
+    fig = px.line(
+        history_df,
+        x="eval_date",
+        y="average",
+        color="model",
+        markers=True,
+        title="Model Performance Over Time",
+        labels={
+            "eval_date": "Evaluation Date",
+            "average": "Average Score (%)",
+            "model": "Model",
+        },
+    )
+    fig.update_layout(
+        xaxis_title="Date",
+        yaxis_title="Average Score (%)",
+        legend_title="Model",
+        hovermode="x unified",
+        yaxis=dict(range=[0, 105]),
+    )
+    return fig
 
 
 def init_leaderboard(dataframe):
@@ -130,6 +180,29 @@ with demo:
     with gr.Tabs(elem_classes="tab-buttons") as tabs:
         with gr.TabItem("🏅 LLM Benchmark", elem_id="llm-benchmark-tab-table", id=0):
             leaderboard = init_leaderboard(LEADERBOARD_DF)
+
+        with gr.TabItem("📈 Trends", elem_id="llm-benchmark-tab-trends", id=1):
+            gr.Markdown(
+                "### Performance Trends\n"
+                "Track how model scores change over time. "
+                "Averages are computed over available evaluation days within each window. "
+                "The *(N/M)* annotation shows how many days of data were available.",
+                elem_classes="markdown-text",
+            )
+            trend_chart = gr.Plot(value=build_trend_chart(TREND_HISTORY_DF))
+            gr.Markdown("### Summary: 1-Day / 3-Day / 7-Day Averages")
+            if not TREND_SUMMARY_DF.empty:
+                trend_table = gr.Dataframe(
+                    value=TREND_SUMMARY_DF,
+                    headers=list(TREND_SUMMARY_DF.columns),
+                    interactive=False,
+                )
+            else:
+                gr.Markdown(
+                    "*No historical data available yet. "
+                    "Trend data will appear once the daily evaluation pipeline "
+                    "has run for multiple days.*"
+                )
 
         with gr.TabItem("📝 About", elem_id="llm-benchmark-tab-table", id=2):
             gr.Markdown(LLM_BENCHMARKS_TEXT, elem_classes="markdown-text")

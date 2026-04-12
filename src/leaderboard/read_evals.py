@@ -2,7 +2,9 @@ import glob
 import json
 import math
 import os
-from dataclasses import dataclass
+import re
+from dataclasses import dataclass, field
+from datetime import datetime, timezone
 
 import dateutil
 import numpy as np
@@ -31,6 +33,7 @@ class EvalResult:
     num_params: int = 0
     date: str = ""  # submission date of request file
     still_on_hub: bool = False
+    eval_date: str = ""  # YYYY-MM-DD date of this evaluation run
 
     @classmethod
     def init_from_json_file(cls, json_filepath):
@@ -93,6 +96,15 @@ class EvalResult:
             mean_acc = np.mean(accs) * 100.0
             results[task.benchmark] = mean_acc
 
+        # Parse eval_date from config or infer from filename
+        eval_date = config.get("eval_date", "")
+        if not eval_date:
+            # Try to extract date from filename pattern: results_YYYY-MM-DD.json
+            basename = os.path.basename(json_filepath)
+            date_match = re.search(r"(\d{4}-\d{2}-\d{2})", basename)
+            if date_match:
+                eval_date = date_match.group(1)
+
         return cls(
             eval_name=result_key,
             full_model=full_model,
@@ -103,6 +115,7 @@ class EvalResult:
             revision=config.get("model_sha", ""),
             still_on_hub=still_on_hub,
             architecture=architecture,
+            eval_date=eval_date,
         )
 
     def update_with_request_file(self, requests_path):
@@ -133,7 +146,9 @@ class EvalResult:
 
     def to_dict(self):
         """Converts the Eval Result to a dict compatible with our dataframe display"""
-        average = sum([v for v in self.results.values() if v is not None]) / len(Tasks)
+        num_tasks = len(Tasks)
+        present_scores = [v for v in self.results.values() if v is not None]
+        average = sum(present_scores) / num_tasks if num_tasks > 0 else 0
         data_dict = {
             "eval_name": self.eval_name,  # not a column, just a save name,
             AutoEvalColumn.precision.name: self.precision.value.name,
@@ -151,7 +166,7 @@ class EvalResult:
         }
 
         for task in Tasks:
-            data_dict[task.value.col_name] = self.results[task.value.benchmark]
+            data_dict[task.value.col_name] = self.results.get(task.value.benchmark, None)
 
         return data_dict
 
@@ -209,27 +224,30 @@ def get_request_file_for_model(requests_path, model_name, precision):
     return request_file
 
 
-def get_raw_eval_results(results_path: str, requests_path: str) -> list[EvalResult]:
-    """From the path of the results folder root, extract all needed info for results"""
+def _load_all_eval_results(results_path: str, requests_path: str) -> list[EvalResult]:
+    """Load every result JSON file under *results_path* as an EvalResult.
+
+    Unlike the previous implementation this does **not** deduplicate by
+    eval_name — it returns one ``EvalResult`` per file so that callers
+    can work with the full evaluation history (multiple dates per model).
+    """
     model_result_filepaths = []
 
     for root, _, files in os.walk(results_path):
-        # We should only have json files in model results
-        if len(files) == 0 or any([not f.endswith(".json") for f in files]):
+        json_files = [f for f in files if f.endswith(".json")]
+        if not json_files:
             continue
 
-        # Sort the files by date
-        try:
-            files.sort(key=lambda x: x.removesuffix(".json").removeprefix("results_")[:-7])
-        except dateutil.parser._parser.ParserError:
-            files = [files[-1]]
+        # Sort so that date-indexed files appear in chronological order
+        json_files.sort()
 
-        for file in files:
+        for file in json_files:
             model_result_filepaths.append(os.path.join(root, file))
-    eval_results = {}
+
     print(f"MODEL FILE PATHS: {model_result_filepaths}")
+
+    all_results: list[EvalResult] = []
     for model_result_filepath in model_result_filepaths:
-        # Creation of result
         try:
             eval_result = EvalResult.init_from_json_file(model_result_filepath)
         except Exception as e:
@@ -237,19 +255,42 @@ def get_raw_eval_results(results_path: str, requests_path: str) -> list[EvalResu
             continue
         eval_result.update_with_request_file(requests_path)
 
-        # Store results of same eval together
-        eval_name = eval_result.eval_name
-        if eval_name in eval_results.keys():
-            eval_results[eval_name].results.update({k: v for k, v in eval_result.results.items() if v is not None})
-        else:
-            eval_results[eval_name] = eval_result
-
-    results = []
-    for v in eval_results.values():
+        # Verify the result has all required task scores
         try:
-            v.to_dict()  # we test if the dict version is complete
-            results.append(v)
-        except KeyError:  # not all eval values present
+            eval_result.to_dict()
+        except KeyError:
             continue
 
-    return results
+        all_results.append(eval_result)
+
+    return all_results
+
+
+def get_raw_eval_results(results_path: str, requests_path: str) -> list[EvalResult]:
+    """Return the **latest** result per model (original behaviour).
+
+    If a model has multiple date-indexed results, only the most recent
+    one (by ``eval_date``, falling back to filename sort order) is kept.
+    Legacy result files without an ``eval_date`` are treated as having
+    date ``""`` which sorts before any real date, so a dated file will
+    always win.
+    """
+    all_results = _load_all_eval_results(results_path, requests_path)
+
+    # Keep only the latest per eval_name
+    latest: dict[str, EvalResult] = {}
+    for r in all_results:
+        key = r.eval_name
+        if key not in latest or r.eval_date >= latest[key].eval_date:
+            latest[key] = r
+
+    return list(latest.values())
+
+
+def get_all_eval_results(results_path: str, requests_path: str) -> list[EvalResult]:
+    """Return **all** evaluation results (full history, multiple dates per model).
+
+    Used by the aggregation layer to compute 1-day / 3-day / 7-day
+    averages and to build trend charts.
+    """
+    return _load_all_eval_results(results_path, requests_path)

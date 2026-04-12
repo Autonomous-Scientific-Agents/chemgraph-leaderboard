@@ -2,9 +2,9 @@
 """Transform ChemGraph benchmark results into HF leaderboard-compatible JSON files.
 
 Reads the latest ``benchmark_*.json`` from a ChemGraph eval output directory,
-extracts per-model single_agent judge scores, groups the 14 queries into 8
-task categories, and writes per-model results + request JSON files that the
-leaderboard app can consume.
+extracts per-model single_agent judge scores, groups queries by the
+``category`` field in each judge detail entry, and writes per-model results +
+request JSON files that the leaderboard app can consume.
 
 Optionally pushes the generated files to the HF Hub datasets.
 
@@ -32,39 +32,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-
-# ---- Query-to-category mapping -------------------------------------------
-# The 14 ChemGraph ground-truth queries grouped into 8 leaderboard tasks.
-# Keys are query IDs (str), values are category benchmark keys.
-
-QUERY_TO_CATEGORY: Dict[str, str] = {
-    "1": "smi_lookup",  # Name -> SMILES (single molecule)
-    "2": "smi_lookup",  # Name -> SMILES (multiple molecules)
-    "3": "coord_gen",  # SMILES -> 3D coordinates (single)
-    "4": "coord_gen",  # SMILES -> 3D coordinates (multiple)
-    "5": "geom_opt",  # Geometry optimization
-    "6": "vib_freq",  # Vibrational frequency analysis
-    "7": "thermo",  # Thermochemical properties
-    "8": "dipole",  # Dipole moment
-    "9": "energy",  # Single-point energy + JSON extraction
-    "10": "energy",  # Single-point energy (from SMILES)
-    "11": "energy",  # Geometry opt + JSON extraction
-    "12": "react_gibbs",  # Reaction Gibbs free energy (methane combustion)
-    "13": "react_gibbs",  # Reaction Gibbs free energy (ammonia synthesis)
-    "14": "react_gibbs",  # Reaction Gibbs free energy (water-gas shift)
-}
-
-# All category keys in display order
-CATEGORIES = [
-    "smi_lookup",
-    "coord_gen",
-    "geom_opt",
-    "vib_freq",
-    "thermo",
-    "dipole",
-    "energy",
-    "react_gibbs",
-]
 
 # ---- HF Hub repo IDs (must match src/envs.py) ----------------------------
 RESULTS_REPO = "Autonomous-Scientific-Agents/results"
@@ -181,26 +148,29 @@ def extract_category_scores(
 ) -> Dict[str, float]:
     """Compute per-category accuracy from per-query judge details.
 
+    Categories are read directly from the ``category`` field in each
+    judge detail entry — no hardcoded mapping is needed.
+
     Parameters
     ----------
     judge_details : list of dict
-        Each dict has at minimum ``query_id`` (str) and ``score`` (0 or 1).
+        Each dict has at minimum ``category`` (str) and ``score`` (0 or 1).
         Entries with ``parse_error`` set are treated as score=0.
 
     Returns
     -------
     dict
         ``{category_key: accuracy}`` where accuracy is in [0.0, 1.0].
+        Keys are sorted alphabetically for deterministic output.
     """
-    # Accumulate correct/total per category
-    cat_correct: Dict[str, int] = {c: 0 for c in CATEGORIES}
-    cat_total: Dict[str, int] = {c: 0 for c in CATEGORIES}
+    cat_correct: Dict[str, int] = {}
+    cat_total: Dict[str, int] = {}
 
     for detail in judge_details:
-        qid = str(detail.get("query_id", ""))
-        category = QUERY_TO_CATEGORY.get(qid)
+        category = detail.get("category")
         if category is None:
-            print(f"  Warning: query_id={qid!r} not in QUERY_TO_CATEGORY, skipping")
+            qid = detail.get("query_id", "?")
+            print(f"  Warning: query_id={qid!r} has no category field, skipping")
             continue
 
         score = detail.get("score", 0)
@@ -208,19 +178,13 @@ def extract_category_scores(
         if detail.get("parse_error"):
             score = 0
 
-        cat_total[category] += 1
-        cat_correct[category] += int(score)
+        cat_total[category] = cat_total.get(category, 0) + 1
+        cat_correct[category] = cat_correct.get(category, 0) + int(score)
 
-    # Compute accuracy per category
+    # Compute accuracy per category (sorted for deterministic output)
     results: Dict[str, float] = {}
-    for cat in CATEGORIES:
-        total = cat_total[cat]
-        if total > 0:
-            results[cat] = cat_correct[cat] / total
-        else:
-            # No queries for this category — should not happen with the
-            # standard 14-query dataset, but handle gracefully
-            results[cat] = 0.0
+    for cat in sorted(cat_total):
+        results[cat] = cat_correct[cat] / cat_total[cat]
 
     return results
 
@@ -230,13 +194,24 @@ def build_results_json(
     category_scores: Dict[str, float],
     model_dtype: str,
     model_sha: str,
+    eval_date: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Build a leaderboard-compatible results JSON structure."""
+    """Build a leaderboard-compatible results JSON structure.
+
+    Parameters
+    ----------
+    eval_date : str, optional
+        ISO date string (YYYY-MM-DD) for this evaluation run.
+        If not provided, defaults to today's UTC date.
+    """
+    if eval_date is None:
+        eval_date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     return {
         "config": {
             "model_dtype": model_dtype,
             "model_name": model_id,
             "model_sha": model_sha,
+            "eval_date": eval_date,
         },
         "results": {cat: {"accuracy": score} for cat, score in category_scores.items()},
     }
@@ -265,7 +240,12 @@ def build_request_json(
 
 
 def push_to_hub(results_dir: Path, requests_dir: Path) -> None:
-    """Upload generated results and requests to HF Hub datasets."""
+    """Upload generated results and requests to HF Hub datasets.
+
+    Uses per-file uploads so that existing files on the Hub are not
+    deleted — each daily run *adds* new date-indexed result files
+    alongside any previously uploaded results.
+    """
     from huggingface_hub import HfApi
 
     token = os.environ.get("HF_TOKEN")
@@ -278,21 +258,31 @@ def push_to_hub(results_dir: Path, requests_dir: Path) -> None:
 
     api = HfApi(token=token)
 
+    # Upload result files individually (additive — won't delete old files)
     print(f"\nPushing results to {RESULTS_REPO} ...")
-    api.upload_folder(
-        repo_id=RESULTS_REPO,
-        folder_path=str(results_dir),
-        repo_type="dataset",
-        commit_message="Update leaderboard results from ChemGraph eval",
-    )
+    for result_file in results_dir.rglob("*.json"):
+        path_in_repo = str(result_file.relative_to(results_dir))
+        print(f"  Uploading {path_in_repo}")
+        api.upload_file(
+            path_or_fileobj=str(result_file),
+            path_in_repo=path_in_repo,
+            repo_id=RESULTS_REPO,
+            repo_type="dataset",
+            commit_message=f"Add eval result: {path_in_repo}",
+        )
 
+    # Upload request files individually
     print(f"Pushing requests to {REQUESTS_REPO} ...")
-    api.upload_folder(
-        repo_id=REQUESTS_REPO,
-        folder_path=str(requests_dir),
-        repo_type="dataset",
-        commit_message="Update leaderboard requests from ChemGraph eval",
-    )
+    for request_file in requests_dir.rglob("*.json"):
+        path_in_repo = str(request_file.relative_to(requests_dir))
+        print(f"  Uploading {path_in_repo}")
+        api.upload_file(
+            path_or_fileobj=str(request_file),
+            path_in_repo=path_in_repo,
+            repo_id=REQUESTS_REPO,
+            repo_type="dataset",
+            commit_message=f"Update request: {path_in_repo}",
+        )
 
     print("Done pushing to Hub.")
 
@@ -327,13 +317,19 @@ def main() -> None:
     args.requests_outdir.mkdir(parents=True, exist_ok=True)
 
     timestamp_str = metadata.get("timestamp")
+    eval_date = None  # YYYY-MM-DD string for date-indexed filenames
     if timestamp_str:
         # Normalize to ISO format
         try:
             dt = datetime.fromisoformat(timestamp_str)
             timestamp_str = dt.strftime("%Y-%m-%dT%H:%M:%SZ")
+            eval_date = dt.strftime("%Y-%m-%d")
         except (ValueError, TypeError):
             timestamp_str = None
+
+    # Fallback: use current UTC date
+    if eval_date is None:
+        eval_date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
     # 4. Process each model
     processed = 0
@@ -343,7 +339,8 @@ def main() -> None:
             continue
 
         wf_data = model_data[workflow]
-        judge_details = wf_data.get("judge_details", [])
+        # Support both old ("judge_details") and new ("structured_judge_details") key names
+        judge_details = wf_data.get("structured_judge_details") or wf_data.get("judge_details", [])
         if not judge_details:
             print(f"  Skipping {short_name}: no judge_details")
             continue
@@ -358,13 +355,15 @@ def main() -> None:
             print(f"    {cat}: {score * 100:.1f}%")
         print(f"    Average: {avg * 100:.1f}%")
 
-        # Write results JSON
-        results_obj = build_results_json(model_id, category_scores, args.model_dtype, args.default_sha)
+        # Write results JSON (date-indexed filename for historical tracking)
+        results_obj = build_results_json(
+            model_id, category_scores, args.model_dtype, args.default_sha, eval_date=eval_date
+        )
         safe_name = sanitize_filename(model_id)
         # Put each model in its own subdirectory (leaderboard expects this)
         model_results_dir = args.results_outdir / safe_name
         model_results_dir.mkdir(parents=True, exist_ok=True)
-        results_path = model_results_dir / f"{safe_name}.results.json"
+        results_path = model_results_dir / f"results_{eval_date}.json"
         with open(results_path, "w") as f:
             json.dump(results_obj, f, indent=2)
         print(f"    Results: {results_path}")
