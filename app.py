@@ -1,4 +1,5 @@
 import sys
+import time
 
 import gradio as gr
 from gradio_leaderboard import Leaderboard, ColumnFilter, SelectColumns
@@ -48,31 +49,38 @@ def restart_space():
 
 
 ### Space initialisation
+
+MAX_DOWNLOAD_RETRIES = 3
+
+
+def download_with_retry(repo_id: str, local_dir: str, label: str) -> None:
+    """Download a HF Hub dataset with retries. Restarts the Space only after all retries are exhausted."""
+    for attempt in range(1, MAX_DOWNLOAD_RETRIES + 1):
+        try:
+            print(f"Downloading {label} ({repo_id}) — attempt {attempt}/{MAX_DOWNLOAD_RETRIES}")
+            snapshot_download(
+                repo_id=repo_id,
+                local_dir=local_dir,
+                repo_type="dataset",
+                tqdm_class=None,
+                etag_timeout=30,
+                token=TOKEN,
+            )
+            return  # success
+        except Exception as e:
+            print(f"WARNING: Failed to download {label}: {e}")
+            if attempt < MAX_DOWNLOAD_RETRIES:
+                wait = 10 * attempt
+                print(f"  Retrying in {wait}s...")
+                time.sleep(wait)
+            else:
+                print(f"ERROR: All {MAX_DOWNLOAD_RETRIES} download attempts failed for {label}. Restarting space.")
+                restart_space()
+
+
 if not LOCAL_MODE:
-    try:
-        print(EVAL_REQUESTS_PATH)
-        snapshot_download(
-            repo_id=QUEUE_REPO,
-            local_dir=EVAL_REQUESTS_PATH,
-            repo_type="dataset",
-            tqdm_class=None,
-            etag_timeout=30,
-            token=TOKEN,
-        )
-    except Exception:
-        restart_space()
-    try:
-        print(EVAL_RESULTS_PATH)
-        snapshot_download(
-            repo_id=RESULTS_REPO,
-            local_dir=EVAL_RESULTS_PATH,
-            repo_type="dataset",
-            tqdm_class=None,
-            etag_timeout=30,
-            token=TOKEN,
-        )
-    except Exception:
-        restart_space()
+    download_with_retry(QUEUE_REPO, EVAL_REQUESTS_PATH, "eval requests")
+    download_with_retry(RESULTS_REPO, EVAL_RESULTS_PATH, "eval results")
 else:
     print("LOCAL MODE: skipping HF Hub downloads, using local eval-results/ and eval-queue/")
 

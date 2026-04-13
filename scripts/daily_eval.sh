@@ -5,18 +5,36 @@
 #
 #   0 2 * * * /path/to/chemgraph-leaderboard/scripts/daily_eval.sh >> /path/to/eval.log 2>&1
 #
-# Prerequisites:
-#   - chemgraph package installed (pip install chemgraph)
-#   - HF_TOKEN environment variable set (read/write token for HF Hub)
-#   - config.toml with API keys for LLM providers
+# Modes:
+#   Full pipeline (default):
+#     ./scripts/daily_eval.sh
 #
-# Configuration — edit these variables to match your setup:
+#   Convert-only (skip eval, use an existing benchmark file):
+#     SKIP_EVAL=true BENCHMARK_FILE=/path/to/benchmark_2026-04-13.json ./scripts/daily_eval.sh
+#
+#   Convert-only (skip eval, auto-detect latest benchmark in EVAL_OUTPUT_DIR):
+#     SKIP_EVAL=true ./scripts/daily_eval.sh
+#
+# Prerequisites:
+#   - chemgraph package installed (pip install chemgraph)  [unless SKIP_EVAL=true]
+#   - HF_TOKEN environment variable set (read/write token for HF Hub)
+#   - config.toml with API keys for LLM providers          [unless SKIP_EVAL=true]
+#
+# Configuration — edit these variables or override via environment:
 
 set -euo pipefail
 
 # ---------- Configuration ----------
 # Path to the chemgraph-leaderboard repo
 LEADERBOARD_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+
+# Skip the chemgraph eval step and only convert + push existing results.
+SKIP_EVAL="${SKIP_EVAL:-false}"
+
+# Path to a specific benchmark_*.json to convert. When set, --benchmark-file
+# is passed to the converter and --eval-dir is ignored for file discovery.
+# Leave empty to auto-detect the latest file in EVAL_OUTPUT_DIR.
+BENCHMARK_FILE="${BENCHMARK_FILE:-}"
 
 # Path to the ChemGraph config file with API keys
 CHEMGRAPH_CONFIG="${CHEMGRAPH_CONFIG:-$HOME/.chemgraph/config.toml}"
@@ -45,34 +63,45 @@ MODEL_MAP="$LEADERBOARD_DIR/dataset/model_map.json"
 echo "========================================"
 echo "ChemGraph Daily Evaluation"
 echo "Date: $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+echo "Mode: $([ "$SKIP_EVAL" = "true" ] && echo "convert-only" || echo "full pipeline")"
 echo "========================================"
 
 # Create eval output directory
 mkdir -p "$EVAL_OUTPUT_DIR"
 
-# Step 1: Run ChemGraph evaluation
-echo ""
-echo "[Step 1/2] Running ChemGraph evaluation..."
-echo "  Models:      $MODELS"
-echo "  Judge:       $JUDGE_MODEL"
-echo "  Workflow:    $WORKFLOW"
-echo "  Config:      $CHEMGRAPH_CONFIG"
-echo "  Output:      $EVAL_OUTPUT_DIR"
+# Step 1: Run ChemGraph evaluation (unless SKIP_EVAL=true)
+if [ "$SKIP_EVAL" = "true" ]; then
+    echo ""
+    echo "[Step 1/2] Skipping ChemGraph evaluation (SKIP_EVAL=true)"
+    if [ -n "$BENCHMARK_FILE" ]; then
+        echo "  Benchmark file: $BENCHMARK_FILE"
+    else
+        echo "  Will auto-detect latest benchmark in: $EVAL_OUTPUT_DIR"
+    fi
+else
+    echo ""
+    echo "[Step 1/2] Running ChemGraph evaluation..."
+    echo "  Models:      $MODELS"
+    echo "  Judge:       $JUDGE_MODEL"
+    echo "  Workflow:    $WORKFLOW"
+    echo "  Config:      $CHEMGRAPH_CONFIG"
+    echo "  Output:      $EVAL_OUTPUT_DIR"
 
-# shellcheck disable=SC2086
-#chemgraph eval \
-#    --models $MODELS \
-#    --judge-model "$JUDGE_MODEL" \
-#    --workflows "$WORKFLOW" \
-#    --output-dir "$EVAL_OUTPUT_DIR" \
-#    --config "$CHEMGRAPH_CONFIG" \
-#    --report all
+    # shellcheck disable=SC2086
+    chemgraph eval \
+        --models $MODELS \
+        --judge-model "$JUDGE_MODEL" \
+        --workflows "$WORKFLOW" \
+        --output-dir "$EVAL_OUTPUT_DIR" \
+        --config "$CHEMGRAPH_CONFIG" \
+        --report all
 
-#EVAL_EXIT=$?
-#if [ $EVAL_EXIT -ne 0 ]; then
-#    echo "ERROR: chemgraph eval failed with exit code $EVAL_EXIT"
-#    exit $EVAL_EXIT
-#fi
+    EVAL_EXIT=$?
+    if [ $EVAL_EXIT -ne 0 ]; then
+        echo "ERROR: chemgraph eval failed with exit code $EVAL_EXIT"
+        exit $EVAL_EXIT
+    fi
+fi
 
 # Step 2: Transform results and push to HF Hub
 echo ""
@@ -84,13 +113,23 @@ echo "[Step 2/2] Transforming results and pushing to HF Hub..."
 echo "  Cleaning staging directories..."
 rm -rf "$RESULTS_OUTDIR" "$REQUESTS_OUTDIR"
 
-python "$LEADERBOARD_DIR/scripts/chemgraph_to_leaderboard.py" \
-    --eval-dir "$EVAL_OUTPUT_DIR" \
-    --model-map "$MODEL_MAP" \
-    --results-outdir "$RESULTS_OUTDIR" \
-    --requests-outdir "$REQUESTS_OUTDIR" \
-    --workflow "$WORKFLOW" \
+# Build the converter command
+CONVERT_CMD=(
+    python "$LEADERBOARD_DIR/scripts/chemgraph_to_leaderboard.py"
+    --eval-dir "$EVAL_OUTPUT_DIR"
+    --model-map "$MODEL_MAP"
+    --results-outdir "$RESULTS_OUTDIR"
+    --requests-outdir "$REQUESTS_OUTDIR"
+    --workflow "$WORKFLOW"
     --push-to-hub
+)
+
+# Add --benchmark-file if a specific file was provided
+if [ -n "$BENCHMARK_FILE" ]; then
+    CONVERT_CMD+=(--benchmark-file "$BENCHMARK_FILE")
+fi
+
+"${CONVERT_CMD[@]}"
 
 PUSH_EXIT=$?
 if [ $PUSH_EXIT -ne 0 ]; then

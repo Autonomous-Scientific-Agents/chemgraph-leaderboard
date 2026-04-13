@@ -10,14 +10,21 @@ Optionally pushes the generated files to the HF Hub datasets.
 
 Usage::
 
-    # Generate files locally
+    # Generate files locally (auto-detect latest benchmark)
     python scripts/chemgraph_to_leaderboard.py \
         --eval-dir /path/to/ChemGraph/eval_results \
         --model-map dataset/model_map.json \
         --results-outdir hub_results \
         --requests-outdir hub_requests
 
-    # Generate and push to HF Hub
+    # Generate from a specific benchmark file and push to HF Hub
+    python scripts/chemgraph_to_leaderboard.py \
+        --eval-dir /path/to/ChemGraph/eval_results \
+        --benchmark-file /path/to/benchmark_2026-04-13.json \
+        --model-map dataset/model_map.json \
+        --push-to-hub
+
+    # Auto-detect latest benchmark and push to HF Hub
     python scripts/chemgraph_to_leaderboard.py \
         --eval-dir /path/to/ChemGraph/eval_results \
         --model-map dataset/model_map.json \
@@ -30,12 +37,25 @@ import os
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Set
 
+# ---- HF Hub repo IDs ----------------------------------------------------
+# Import from src/envs.py when running inside the repo.  Fall back to
+# hardcoded defaults so the script can also be used standalone.
+try:
+    # Add the repo root to sys.path so ``src`` is importable.
+    _SCRIPT_DIR = Path(__file__).resolve().parent
+    _REPO_ROOT = _SCRIPT_DIR.parent
+    if str(_REPO_ROOT) not in sys.path:
+        sys.path.insert(0, str(_REPO_ROOT))
+    from src.envs import RESULTS_REPO, QUEUE_REPO as REQUESTS_REPO  # noqa: F401
+    from src.about import Tasks as _Tasks
 
-# ---- HF Hub repo IDs (must match src/envs.py) ----------------------------
-RESULTS_REPO = "Autonomous-Scientific-Agents/results"
-REQUESTS_REPO = "Autonomous-Scientific-Agents/requests"
+    KNOWN_CATEGORIES: Set[str] = {t.value.benchmark for t in _Tasks}
+except Exception:
+    RESULTS_REPO = "Autonomous-Scientific-Agents/results"
+    REQUESTS_REPO = "Autonomous-Scientific-Agents/requests"
+    KNOWN_CATEGORIES = set()  # validation disabled when running standalone
 
 
 def parse_args() -> argparse.Namespace:
@@ -185,6 +205,15 @@ def extract_category_scores(
     results: Dict[str, float] = {}
     for cat in sorted(cat_total):
         results[cat] = cat_correct[cat] / cat_total[cat]
+
+    # Validate category keys against the Tasks enum when available
+    if KNOWN_CATEGORIES:
+        unknown = set(results.keys()) - KNOWN_CATEGORIES
+        missing = KNOWN_CATEGORIES - set(results.keys())
+        if unknown:
+            print(f"  WARNING: Category keys not in Tasks enum (will be ignored by leaderboard): {sorted(unknown)}")
+        if missing:
+            print(f"  WARNING: Expected categories missing from eval data: {sorted(missing)}")
 
     return results
 
