@@ -63,8 +63,8 @@ def parse_args() -> argparse.Namespace:
     p.add_argument(
         "--eval-dir",
         type=Path,
-        required=True,
-        help="Path to ChemGraph eval_results directory.",
+        default=None,
+        help="Path to ChemGraph eval_results directory. Required when --benchmark-file is not given.",
     )
     p.add_argument(
         "--model-map",
@@ -111,7 +111,10 @@ def parse_args() -> argparse.Namespace:
         default="main",
         help="Value for config.model_sha in results JSON.",
     )
-    return p.parse_args()
+    args = p.parse_args()
+    if not args.benchmark_file and not args.eval_dir:
+        p.error("--eval-dir is required when --benchmark-file is not specified")
+    return args
 
 
 def find_latest_benchmark(eval_dir: Path, workflow: str = "single_agent") -> Path:
