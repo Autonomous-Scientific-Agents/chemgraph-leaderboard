@@ -146,9 +146,15 @@ class EvalResult:
 
     def to_dict(self):
         """Converts the Eval Result to a dict compatible with our dataframe display"""
-        num_tasks = len(Tasks)
-        present_scores = [v for v in self.results.values() if v is not None]
-        average = sum(present_scores) / num_tasks if num_tasks > 0 else 0
+        # Weighted average: each category score is weighted by its number of
+        # questions so the overall average equals total_correct / 40 * 100.
+        total_questions = sum(t.value.num_questions for t in Tasks)
+        weighted_sum = 0.0
+        for task in Tasks:
+            score = self.results.get(task.value.benchmark)
+            if score is not None:
+                weighted_sum += score * task.value.num_questions
+        average = weighted_sum / total_questions if total_questions > 0 else 0
         data_dict = {
             "eval_name": self.eval_name,  # not a column, just a save name,
             AutoEvalColumn.precision.name: self.precision.value.name,

@@ -24,12 +24,17 @@ def _eval_results_to_history_df(eval_results: list[EvalResult]) -> pd.DataFrame:
 
     Rows without a valid ``eval_date`` are excluded.
     """
-    num_tasks = len(Tasks)
+    total_questions = sum(t.value.num_questions for t in Tasks)
     rows: list[dict] = []
     for r in eval_results:
         if not r.eval_date:
             continue
-        avg = sum(v for v in r.results.values() if v is not None) / num_tasks
+        weighted_sum = 0.0
+        for task in Tasks:
+            score = r.results.get(task.value.benchmark)
+            if score is not None:
+                weighted_sum += score * task.value.num_questions
+        avg = weighted_sum / total_questions
         row = {
             "model": r.full_model,
             "eval_date": r.eval_date,

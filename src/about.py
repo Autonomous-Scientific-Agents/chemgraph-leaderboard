@@ -7,6 +7,7 @@ class Task:
     benchmark: str
     metric: str
     col_name: str
+    num_questions: int = 1  # number of individual questions in this category
 
 
 # 12 task categories matching the ``category`` field in ChemGraph benchmark
@@ -14,19 +15,19 @@ class Task:
 # the transform script (scripts/chemgraph_to_leaderboard.py).
 # ---------------------------------------------------
 class Tasks(Enum):
-    # benchmark key in results JSON, metric key, display column name
-    task0 = Task("smiles_lookup", "accuracy", "SMILES Lookup")
-    task1 = Task("optimization_from_name", "accuracy", "Opt (Name)")
-    task2 = Task("optimization_from_smiles", "accuracy", "Opt (SMILES)")
-    task3 = Task("vibrations_from_name", "accuracy", "Vib (Name)")
-    task4 = Task("vibrations_from_smiles", "accuracy", "Vib (SMILES)")
-    task5 = Task("thermochemistry_from_name", "accuracy", "Thermo (Name)")
-    task6 = Task("thermochemistry_from_smiles", "accuracy", "Thermo (SMILES)")
-    task7 = Task("dipole_from_name", "accuracy", "Dipole (Name)")
-    task8 = Task("dipole_from_smiles", "accuracy", "Dipole (SMILES)")
-    task9 = Task("energy_from_name", "accuracy", "Energy (Name)")
-    task10 = Task("energy_from_smiles", "accuracy", "Energy (SMILES)")
-    task11 = Task("reaction_energy", "accuracy", "Reaction Energy")
+    # benchmark key in results JSON, metric key, display column name, num questions
+    task0 = Task("smiles_lookup", "accuracy", "SMILES Lookup", 4)
+    task1 = Task("optimization_from_name", "accuracy", "Opt (Name)", 4)
+    task2 = Task("optimization_from_smiles", "accuracy", "Opt (SMILES)", 2)
+    task3 = Task("vibrations_from_name", "accuracy", "Vib (Name)", 2)
+    task4 = Task("vibrations_from_smiles", "accuracy", "Vib (SMILES)", 2)
+    task5 = Task("thermochemistry_from_name", "accuracy", "Thermo (Name)", 4)
+    task6 = Task("thermochemistry_from_smiles", "accuracy", "Thermo (SMILES)", 2)
+    task7 = Task("dipole_from_name", "accuracy", "Dipole (Name)", 2)
+    task8 = Task("dipole_from_smiles", "accuracy", "Dipole (SMILES)", 2)
+    task9 = Task("energy_from_name", "accuracy", "Energy (Name)", 4)
+    task10 = Task("energy_from_smiles", "accuracy", "Energy (SMILES)", 2)
+    task11 = Task("reaction_energy", "accuracy", "Reaction Energy", 10)
 
 
 NUM_FEWSHOT = 0  # Change with your few shot
