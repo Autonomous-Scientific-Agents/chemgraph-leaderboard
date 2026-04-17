@@ -1,5 +1,6 @@
 import sys
 import time
+from datetime import datetime, timezone
 
 import gradio as gr
 from gradio_leaderboard import Leaderboard, ColumnFilter, SelectColumns
@@ -144,6 +145,29 @@ def build_trend_chart(history_df: pd.DataFrame):
     return fig
 
 
+def refresh_trend_data():
+    """Re-download eval results from HF Hub and recompute trend data.
+
+    Returns updated values for the trend chart, summary table, and a
+    last-updated timestamp string.  Errors during download or computation
+    are caught so the UI never crashes.
+    """
+    try:
+        if not LOCAL_MODE:
+            download_with_retry(RESULTS_REPO, EVAL_RESULTS_PATH, "eval results")
+
+        summary_df = get_trend_summary_df(EVAL_RESULTS_PATH, EVAL_REQUESTS_PATH)
+        history_df = get_trend_history_df(EVAL_RESULTS_PATH, EVAL_REQUESTS_PATH)
+    except Exception as e:
+        print(f"WARNING: Failed to refresh trend data: {e}")
+        summary_df = pd.DataFrame()
+        history_df = pd.DataFrame()
+
+    chart = build_trend_chart(history_df)
+    timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+    return chart, summary_df, timestamp
+
+
 def init_leaderboard(dataframe):
     if dataframe is None or dataframe.empty:
         # Show an empty leaderboard instead of crashing.
@@ -197,20 +221,33 @@ with demo:
                 "The *(N/M)* annotation shows how many days of data were available.",
                 elem_classes="markdown-text",
             )
+            with gr.Row():
+                refresh_btn = gr.Button("🔄 Refresh", scale=0, min_width=120)
+                last_updated_box = gr.Textbox(
+                    label="Last updated",
+                    value=datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC"),
+                    interactive=False,
+                    scale=1,
+                )
             trend_chart = gr.Plot(value=build_trend_chart(TREND_HISTORY_DF))
             gr.Markdown("### Summary: 1-Day / 3-Day / 7-Day Averages")
-            if not TREND_SUMMARY_DF.empty:
-                trend_table = gr.Dataframe(
-                    value=TREND_SUMMARY_DF,
-                    headers=list(TREND_SUMMARY_DF.columns),
-                    interactive=False,
-                )
-            else:
-                gr.Markdown(
-                    "*No historical data available yet. "
-                    "Trend data will appear once the daily evaluation pipeline "
-                    "has run for multiple days.*"
-                )
+            trend_table = gr.Dataframe(
+                value=TREND_SUMMARY_DF,
+                interactive=False,
+            )
+
+            # Manual refresh on button click
+            refresh_btn.click(
+                fn=refresh_trend_data,
+                outputs=[trend_chart, trend_table, last_updated_box],
+            )
+
+            # Auto-refresh every 10 minutes (600 seconds)
+            trend_timer = gr.Timer(value=600)
+            trend_timer.tick(
+                fn=refresh_trend_data,
+                outputs=[trend_chart, trend_table, last_updated_box],
+            )
 
         with gr.TabItem("📝 About", elem_id="llm-benchmark-tab-table", id=2):
             gr.Markdown(LLM_BENCHMARKS_TEXT, elem_classes="markdown-text")
