@@ -16,10 +16,24 @@ RESULTS_REPO = f"{OWNER}/results"
 # If you setup a cache later, just change HF_HOME
 CACHE_PATH = os.getenv("HF_HOME", ".")
 
-# Local caches
+# Local caches (top-level — used for HF Hub downloads)
 EVAL_REQUESTS_PATH = os.path.join(CACHE_PATH, "eval-queue")
 EVAL_RESULTS_PATH = os.path.join(CACHE_PATH, "eval-results")
 EVAL_REQUESTS_PATH_BACKEND = os.path.join(CACHE_PATH, "eval-queue-bk")
 EVAL_RESULTS_PATH_BACKEND = os.path.join(CACHE_PATH, "eval-results-bk")
+
+# Supported workflow types
+WORKFLOWS = ["single_agent", "multi_agent"]
+
+
+def get_eval_results_path(workflow: str) -> str:
+    """Return the local results path for a given workflow."""
+    return os.path.join(EVAL_RESULTS_PATH, workflow)
+
+
+def get_eval_requests_path(workflow: str) -> str:
+    """Return the local requests path for a given workflow."""
+    return os.path.join(EVAL_REQUESTS_PATH, workflow)
+
 
 API = HfApi(token=TOKEN)

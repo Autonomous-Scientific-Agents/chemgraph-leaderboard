@@ -29,6 +29,12 @@ Usage::
         --eval-dir /path/to/ChemGraph/eval_results \
         --model-map dataset/model_map.json \
         --push-to-hub
+
+    # Process ALL benchmark files in a directory (batch / backfill)
+    python scripts/chemgraph_to_leaderboard.py \
+        --eval-dir /path/to/ChemGraph/eval_results \
+        --model-map dataset/model_map.json \
+        --all --push-to-hub
 """
 
 import argparse
@@ -88,7 +94,12 @@ def parse_args() -> argparse.Namespace:
         "--benchmark-file",
         type=str,
         default=None,
-        help=("Specific benchmark_*.json file to process. If not given, the latest file by timestamp is used."),
+        help="Specific benchmark_*.json file to process. If not given, the latest file by timestamp is used.",
+    )
+    p.add_argument(
+        "--all",
+        action="store_true",
+        help="Process all benchmark_*.json files in --eval-dir (not just the latest).",
     )
     p.add_argument(
         "--workflow",
@@ -112,8 +123,12 @@ def parse_args() -> argparse.Namespace:
         help="Value for config.model_sha in results JSON.",
     )
     args = p.parse_args()
+    if args.all and args.benchmark_file:
+        p.error("--all and --benchmark-file are mutually exclusive")
     if not args.benchmark_file and not args.eval_dir:
         p.error("--eval-dir is required when --benchmark-file is not specified")
+    if args.all and not args.eval_dir:
+        p.error("--eval-dir is required when using --all")
     return args
 
 
@@ -319,14 +334,19 @@ def push_to_hub(results_dir: Path, requests_dir: Path) -> None:
     print("Done pushing to Hub.")
 
 
-def main() -> None:
-    args = parse_args()
+def process_benchmark_file(
+    benchmark_path: Path,
+    workflow: str,
+    model_map: Dict[str, str],
+    results_outdir: Path,
+    requests_outdir: Path,
+    model_dtype: str,
+    default_sha: str,
+) -> int:
+    """Process a single benchmark JSON file and write leaderboard-format output.
 
-    # 1. Find and load the benchmark file
-    if args.benchmark_file:
-        benchmark_path = Path(args.benchmark_file)
-    else:
-        benchmark_path = find_latest_benchmark(args.eval_dir, workflow=args.workflow)
+    Returns the number of models processed.
+    """
     print(f"Using benchmark file: {benchmark_path}")
 
     with open(benchmark_path) as f:
@@ -334,19 +354,11 @@ def main() -> None:
 
     metadata = benchmark.get("metadata", {})
     results = benchmark.get("results", {})
-    workflow = args.workflow
 
     print(f"Timestamp: {metadata.get('timestamp', 'unknown')}")
     print(f"Judge model: {metadata.get('judge_model', 'unknown')}")
     print(f"Workflow: {workflow}")
     print(f"Models: {list(results.keys())}")
-
-    # 2. Load model map
-    model_map = load_model_map(args.model_map)
-
-    # 3. Create output directories
-    args.results_outdir.mkdir(parents=True, exist_ok=True)
-    args.requests_outdir.mkdir(parents=True, exist_ok=True)
 
     timestamp_str = metadata.get("timestamp")
     eval_date = None  # YYYY-MM-DD string for date-indexed filenames
@@ -363,7 +375,6 @@ def main() -> None:
     if eval_date is None:
         eval_date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
-    # 4. Process each model
     processed = 0
     for short_name, model_data in results.items():
         if workflow not in model_data:
@@ -388,30 +399,98 @@ def main() -> None:
         print(f"    Average: {avg * 100:.1f}%")
 
         # Write results JSON (date-indexed filename for historical tracking)
-        results_obj = build_results_json(
-            model_id, category_scores, args.model_dtype, args.default_sha, eval_date=eval_date
-        )
+        # Files are placed under a workflow subfolder so that
+        # single_agent and multi_agent results live side-by-side.
+        results_obj = build_results_json(model_id, category_scores, model_dtype, default_sha, eval_date=eval_date)
         safe_name = sanitize_filename(model_id)
-        # Put each model in its own subdirectory (leaderboard expects this)
-        model_results_dir = args.results_outdir / safe_name
+        # Put each model in its own subdirectory under the workflow folder
+        model_results_dir = results_outdir / workflow / safe_name
         model_results_dir.mkdir(parents=True, exist_ok=True)
         results_path = model_results_dir / f"results_{eval_date}.json"
         with open(results_path, "w") as f:
             json.dump(results_obj, f, indent=2)
         print(f"    Results: {results_path}")
 
-        # Write request JSON
-        request_obj = build_request_json(model_id, args.default_sha, timestamp=timestamp_str)
-        requests_path = args.requests_outdir / f"{safe_name}.request.json"
+        # Write request JSON (also under workflow subfolder)
+        requests_workflow_dir = requests_outdir / workflow
+        requests_workflow_dir.mkdir(parents=True, exist_ok=True)
+        request_obj = build_request_json(model_id, default_sha, timestamp=timestamp_str)
+        requests_path = requests_workflow_dir / f"{safe_name}.request.json"
         with open(requests_path, "w") as f:
             json.dump(request_obj, f, indent=2)
         print(f"    Request: {requests_path}")
 
         processed += 1
 
-    print(f"\nProcessed {processed} model(s).")
+    return processed
 
-    # 5. Push to HF Hub if requested
+
+def find_all_benchmarks(eval_dir: Path, workflow: str = "single_agent") -> List[Path]:
+    """Find all benchmark_*.json files in *eval_dir* that contain the given workflow."""
+    candidates = sorted(eval_dir.glob("benchmark_*.json"))
+    if not candidates:
+        print(f"Error: No benchmark_*.json files found in {eval_dir}", file=sys.stderr)
+        sys.exit(1)
+
+    matched = []
+    for candidate in candidates:
+        try:
+            with open(candidate) as f:
+                data = json.load(f)
+            results = data.get("results", {})
+            for model_data in results.values():
+                if workflow in model_data:
+                    matched.append(candidate)
+                    break
+        except (json.JSONDecodeError, IOError):
+            continue
+
+    if not matched:
+        print(f"Warning: No benchmark files contain workflow '{workflow}', using all files")
+        return candidates
+
+    return matched
+
+
+def main() -> None:
+    args = parse_args()
+
+    # Determine which benchmark files to process
+    if args.benchmark_file:
+        benchmark_paths = [Path(args.benchmark_file)]
+    elif args.all:
+        benchmark_paths = find_all_benchmarks(args.eval_dir, workflow=args.workflow)
+        print(f"Found {len(benchmark_paths)} benchmark file(s) to process")
+    else:
+        benchmark_paths = [find_latest_benchmark(args.eval_dir, workflow=args.workflow)]
+
+    model_map = load_model_map(args.model_map)
+
+    # Create output directories
+    args.results_outdir.mkdir(parents=True, exist_ok=True)
+    args.requests_outdir.mkdir(parents=True, exist_ok=True)
+
+    total_processed = 0
+    for i, benchmark_path in enumerate(benchmark_paths, 1):
+        if len(benchmark_paths) > 1:
+            print(f"\n{'=' * 60}")
+            print(f"File {i}/{len(benchmark_paths)}: {benchmark_path.name}")
+            print(f"{'=' * 60}")
+
+        processed = process_benchmark_file(
+            benchmark_path=benchmark_path,
+            workflow=args.workflow,
+            model_map=model_map,
+            results_outdir=args.results_outdir,
+            requests_outdir=args.requests_outdir,
+            model_dtype=args.model_dtype,
+            default_sha=args.default_sha,
+        )
+        total_processed += processed
+
+    print(f"\nProcessed {total_processed} model result(s) from {len(benchmark_paths)} file(s).")
+
+    # Push to HF Hub if requested
     if args.push_to_hub:
         push_to_hub(args.results_outdir, args.requests_outdir)
 

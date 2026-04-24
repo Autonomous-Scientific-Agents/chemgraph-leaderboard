@@ -21,6 +21,7 @@ def add_new_eval(
     precision: str,
     weight_type: str,
     model_type: str,
+    workflow: str = "Both",
 ):
     global REQUESTED_MODELS
     global USERS_TO_SUBMISSION_DATES
@@ -75,6 +76,12 @@ def add_new_eval(
     # Seems good, creating the eval
     print("Adding new eval")
 
+    # Determine which workflows to submit for
+    if workflow == "Both":
+        workflows_to_submit = ["single_agent", "multi_agent"]
+    else:
+        workflows_to_submit = [workflow]
+
     eval_entry = {
         "model": model,
         "base_model": base_model,
@@ -95,25 +102,29 @@ def add_new_eval(
         return styled_warning("This model has been already submitted.")
 
     print("Creating eval file")
-    OUT_DIR = f"{EVAL_REQUESTS_PATH}/{user_name}"
-    os.makedirs(OUT_DIR, exist_ok=True)
-    out_path = f"{OUT_DIR}/{model_path}_eval_request_False_{precision}_{weight_type}.json"
+    for wf in workflows_to_submit:
+        wf_entry = {**eval_entry, "workflow": wf}
+        OUT_DIR = f"{EVAL_REQUESTS_PATH}/{wf}/{user_name}"
+        os.makedirs(OUT_DIR, exist_ok=True)
+        out_path = f"{OUT_DIR}/{model_path}_eval_request_False_{precision}_{weight_type}.json"
 
-    with open(out_path, "w") as f:
-        f.write(json.dumps(eval_entry))
+        with open(out_path, "w") as f:
+            f.write(json.dumps(wf_entry))
 
-    print("Uploading eval file")
-    API.upload_file(
-        path_or_fileobj=out_path,
-        path_in_repo=out_path.split("eval-queue/")[1],
-        repo_id=QUEUE_REPO,
-        repo_type="dataset",
-        commit_message=f"Add {model} to eval queue",
-    )
+        print(f"Uploading eval file for workflow: {wf}")
+        API.upload_file(
+            path_or_fileobj=out_path,
+            path_in_repo=out_path.split("eval-queue/")[1],
+            repo_id=QUEUE_REPO,
+            repo_type="dataset",
+            commit_message=f"Add {model} to eval queue ({wf})",
+        )
 
-    # Remove the local file
-    os.remove(out_path)
+        # Remove the local file
+        os.remove(out_path)
 
+    wf_label = ", ".join(workflows_to_submit)
     return styled_message(
-        "Your request has been submitted to the evaluation queue!\nPlease wait for up to an hour for the model to show in the PENDING list."
+        f"Your request has been submitted to the evaluation queue for workflow(s): {wf_label}!\n"
+        "Please wait for up to an hour for the model to show in the PENDING list."
     )

@@ -61,6 +61,10 @@ Models are evaluated daily on **40 chemistry queries** grouped into **12 task ca
 Each model's score reflects its ability to **follow structured tool protocols, generate physically meaningful results, and reason across chemistry-specific contexts**.
 Results are scored by a structured judge via JSON output for evaluation with binary accuracy (correct/incorrect) and 5% relative tolerance for numerical values.
 
+Models are evaluated under two workflow types:
+- **Single-Agent** — one agent handles all tool calls and reasoning independently.
+- **Multi-Agent** — multiple specialised agents collaborate to solve queries.
+
 Use this leaderboard to explore how different models and agents perform across core chemistry tasks, from small-molecule modeling to multi-step reaction workflows.
 """
 
@@ -68,12 +72,20 @@ Use this leaderboard to explore how different models and agents perform across c
 LLM_BENCHMARKS_TEXT = f"""
 ## How it works
 
-Models are evaluated using the [ChemGraph](https://github.com/Autonomous-Scientific-Agents/ChemGraph) evaluation framework.
-Each model runs as a **single-agent** workflow, invoking chemistry tools (SMILES lookup, coordinate generation, ASE simulations)
-to answer 40 ground-truth queries. A structured judge then scores each answer as correct or incorrect.
+Models are evaluated using the [ChemGraph](https://github.com/Autonomous-Scientific-Agents/ChemGraph) evaluation framework
+across two workflow types:
+
+- **Single-Agent**: Each model operates as a single agent, invoking chemistry tools
+  (SMILES lookup, coordinate generation, ASE simulations) to answer 40 ground-truth queries.
+- **Multi-Agent**: Multiple specialised agents collaborate to solve the same 40 queries,
+  coordinating tool calls and reasoning across agents.
+
+Both workflows are evaluated on the same 12 task categories and scored identically:
+a structured judge scores each answer as correct or incorrect (binary accuracy with 5%
+relative tolerance for numerical values).
 
 Results are updated daily via an automated pipeline that:
-1. Runs `chemgraph-eval` against all configured models
+1. Runs `chemgraph-eval` against all configured models for both workflows
 2. Transforms the benchmark results into leaderboard format
 3. Pushes updated results to the HF Hub datasets
 
@@ -84,13 +96,22 @@ To reproduce the evaluation locally:
 ```bash
 pip install chemgraph
 
-# Run evaluation
-chemgraph-eval --models gpt4o gpt54 --judge-type structured --config config.toml
+# Run evaluation (single-agent)
+chemgraph-eval --models gpt4o gpt54 --workflows single_agent --judge-type structured --config config.toml
+
+# Run evaluation (multi-agent)
+chemgraph-eval --models gpt4o gpt54 --workflows multi_agent --judge-type structured --config config.toml
 
 # Transform results for the leaderboard
 python scripts/chemgraph_to_leaderboard.py \\
     --eval-dir eval_results \\
-    --model-map dataset/model_map.json
+    --model-map dataset/model_map.json \\
+    --workflow single_agent --push-to-hub
+
+python scripts/chemgraph_to_leaderboard.py \\
+    --eval-dir eval_results \\
+    --model-map dataset/model_map.json \\
+    --workflow multi_agent --push-to-hub
 ```
 
 See the [ChemGraph paper](https://arxiv.org/abs/2506.06363) for full details on the benchmark design and evaluation methodology.
