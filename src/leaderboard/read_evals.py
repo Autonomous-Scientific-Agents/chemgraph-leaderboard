@@ -237,6 +237,10 @@ def _load_all_eval_results(results_path: str, requests_path: str) -> list[EvalRe
     eval_name — it returns one ``EvalResult`` per file so that callers
     can work with the full evaluation history (multiple dates per model).
     """
+    if not os.path.isdir(results_path):
+        print(f"WARNING: Results path does not exist: {results_path}")
+        return []
+
     model_result_filepaths = []
 
     for root, _, files in os.walk(results_path):

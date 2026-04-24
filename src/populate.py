@@ -5,6 +5,7 @@ import pandas as pd
 
 from src.display.formatting import has_no_nan_values, make_clickable_model
 from src.display.utils import AutoEvalColumn, EvalQueueColumn
+from src.envs import WORKFLOWS, get_eval_results_path, get_eval_requests_path
 from src.leaderboard.aggregate import (
     build_leaderboard_trend_columns,
     build_trend_summary,
@@ -104,6 +105,53 @@ def get_evaluation_queue_df(save_path: str, cols: list) -> list[pd.DataFrame]:
     df_running = pd.DataFrame.from_records(running_list, columns=cols)
     df_finished = pd.DataFrame.from_records(finished_list, columns=cols)
     return df_finished, df_running, df_pending
+
+
+def get_combined_trend_history_df(
+    base_results_path: str, base_requests_path: str
+) -> pd.DataFrame:
+    """Return a combined trend history DataFrame across all workflows.
+
+    Each row is annotated with a ``workflow`` column so the chart can
+    distinguish between single_agent and multi_agent results.
+    """
+    frames: list[pd.DataFrame] = []
+    for wf in WORKFLOWS:
+        results_path = get_eval_results_path(wf)
+        requests_path = get_eval_requests_path(wf)
+        all_results = get_all_eval_results(results_path, requests_path)
+        if all_results:
+            df = get_history_df(all_results)
+            if not df.empty:
+                df["workflow"] = wf
+                frames.append(df)
+
+    if not frames:
+        return pd.DataFrame()
+    return pd.concat(frames, ignore_index=True)
+
+
+def get_combined_trend_summary_df(
+    base_results_path: str, base_requests_path: str
+) -> pd.DataFrame:
+    """Return a combined trend summary DataFrame across all workflows.
+
+    Each row is annotated with a ``Workflow`` column.
+    """
+    frames: list[pd.DataFrame] = []
+    for wf in WORKFLOWS:
+        results_path = get_eval_results_path(wf)
+        requests_path = get_eval_requests_path(wf)
+        all_results = get_all_eval_results(results_path, requests_path)
+        if all_results:
+            df = build_trend_summary(all_results)
+            if not df.empty:
+                df["Workflow"] = wf
+                frames.append(df)
+
+    if not frames:
+        return pd.DataFrame()
+    return pd.concat(frames, ignore_index=True)
 
 
 def _load_queue_entry(file_path: str, all_evals: list) -> None:

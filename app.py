@@ -37,8 +37,18 @@ from src.envs import (
     REPO_ID,
     RESULTS_REPO,
     TOKEN,
+    WORKFLOWS,
+    get_eval_results_path,
+    get_eval_requests_path,
 )
-from src.populate import get_evaluation_queue_df, get_leaderboard_df, get_trend_summary_df, get_trend_history_df
+from src.populate import (
+    get_evaluation_queue_df,
+    get_leaderboard_df,
+    get_trend_summary_df,
+    get_trend_history_df,
+    get_combined_trend_history_df,
+    get_combined_trend_summary_df,
+)
 from src.submission.submit import add_new_eval
 
 # --local flag: skip HF Hub downloads and scheduler, use local data only.
@@ -85,14 +95,24 @@ if not LOCAL_MODE:
 else:
     print("LOCAL MODE: skipping HF Hub downloads, using local eval-results/ and eval-queue/")
 
-LEADERBOARD_DF = get_leaderboard_df(EVAL_RESULTS_PATH, EVAL_REQUESTS_PATH, COLS, BENCHMARK_COLS)
+# Load leaderboard data for each workflow
+SINGLE_AGENT_RESULTS = get_eval_results_path("single_agent")
+SINGLE_AGENT_REQUESTS = get_eval_requests_path("single_agent")
+MULTI_AGENT_RESULTS = get_eval_results_path("multi_agent")
+MULTI_AGENT_REQUESTS = get_eval_requests_path("multi_agent")
+
+LEADERBOARD_DF = get_leaderboard_df(SINGLE_AGENT_RESULTS, SINGLE_AGENT_REQUESTS, COLS, BENCHMARK_COLS)
 if not LEADERBOARD_DF.empty:
     LEADERBOARD_DF["T"] = range(1, len(LEADERBOARD_DF) + 1)
 
-# Load trend data for the Trends tab
+LEADERBOARD_DF_MULTI = get_leaderboard_df(MULTI_AGENT_RESULTS, MULTI_AGENT_REQUESTS, COLS, BENCHMARK_COLS)
+if not LEADERBOARD_DF_MULTI.empty:
+    LEADERBOARD_DF_MULTI["T"] = range(1, len(LEADERBOARD_DF_MULTI) + 1)
+
+# Load combined trend data for the Trends tab
 try:
-    TREND_SUMMARY_DF = get_trend_summary_df(EVAL_RESULTS_PATH, EVAL_REQUESTS_PATH)
-    TREND_HISTORY_DF = get_trend_history_df(EVAL_RESULTS_PATH, EVAL_REQUESTS_PATH)
+    TREND_SUMMARY_DF = get_combined_trend_summary_df(EVAL_RESULTS_PATH, EVAL_REQUESTS_PATH)
+    TREND_HISTORY_DF = get_combined_trend_history_df(EVAL_RESULTS_PATH, EVAL_REQUESTS_PATH)
 except Exception as e:
     print(f"WARNING: Failed to load trend data: {e}")
     TREND_SUMMARY_DF = pd.DataFrame()
@@ -112,8 +132,16 @@ except Exception as e:
     pending_eval_queue_df = _empty_queue.copy()
 
 
-def build_trend_chart(history_df: pd.DataFrame):
-    """Build a Plotly line chart showing model scores over time."""
+def build_trend_chart(history_df: pd.DataFrame, workflow_filter: str = "All"):
+    """Build a Plotly line chart showing model scores over time.
+
+    Parameters
+    ----------
+    history_df : pd.DataFrame
+        Combined history with an optional ``workflow`` column.
+    workflow_filter : str
+        One of "All", "single_agent", or "multi_agent".
+    """
     if history_df.empty:
         fig = px.line(title="No historical data available yet")
         fig.update_layout(
@@ -122,19 +150,51 @@ def build_trend_chart(history_df: pd.DataFrame):
         )
         return fig
 
-    fig = px.line(
-        history_df,
-        x="eval_date",
-        y="average",
-        color="model",
-        markers=True,
-        title="Model Performance Over Time",
-        labels={
-            "eval_date": "Evaluation Date",
-            "average": "Average Score (%)",
-            "model": "Model",
-        },
-    )
+    df = history_df.copy()
+
+    # Apply workflow filter
+    if workflow_filter != "All" and "workflow" in df.columns:
+        df = df[df["workflow"] == workflow_filter]
+
+    if df.empty:
+        fig = px.line(title=f"No data available for workflow: {workflow_filter}")
+        fig.update_layout(xaxis_title="Date", yaxis_title="Average Score (%)")
+        return fig
+
+    # Build a display label combining model name and workflow
+    if "workflow" in df.columns and workflow_filter == "All":
+        df["label"] = df["model"] + " (" + df["workflow"] + ")"
+        # Use dash style to distinguish workflows
+        fig = px.line(
+            df,
+            x="eval_date",
+            y="average",
+            color="model",
+            line_dash="workflow",
+            markers=True,
+            title="Model Performance Over Time",
+            labels={
+                "eval_date": "Evaluation Date",
+                "average": "Average Score (%)",
+                "model": "Model",
+                "workflow": "Workflow",
+            },
+        )
+    else:
+        fig = px.line(
+            df,
+            x="eval_date",
+            y="average",
+            color="model",
+            markers=True,
+            title="Model Performance Over Time",
+            labels={
+                "eval_date": "Evaluation Date",
+                "average": "Average Score (%)",
+                "model": "Model",
+            },
+        )
+
     fig.update_layout(
         xaxis_title="Date",
         yaxis_title="Average Score (%)",
@@ -145,7 +205,7 @@ def build_trend_chart(history_df: pd.DataFrame):
     return fig
 
 
-def refresh_trend_data():
+def refresh_trend_data(workflow_filter: str = "All"):
     """Re-download eval results from HF Hub and recompute trend data.
 
     Returns updated values for the trend chart, summary table, and a
@@ -156,14 +216,18 @@ def refresh_trend_data():
         if not LOCAL_MODE:
             download_with_retry(RESULTS_REPO, EVAL_RESULTS_PATH, "eval results")
 
-        summary_df = get_trend_summary_df(EVAL_RESULTS_PATH, EVAL_REQUESTS_PATH)
-        history_df = get_trend_history_df(EVAL_RESULTS_PATH, EVAL_REQUESTS_PATH)
+        summary_df = get_combined_trend_summary_df(EVAL_RESULTS_PATH, EVAL_REQUESTS_PATH)
+        history_df = get_combined_trend_history_df(EVAL_RESULTS_PATH, EVAL_REQUESTS_PATH)
     except Exception as e:
         print(f"WARNING: Failed to refresh trend data: {e}")
         summary_df = pd.DataFrame()
         history_df = pd.DataFrame()
 
-    chart = build_trend_chart(history_df)
+    # Filter summary table if a specific workflow is selected
+    if workflow_filter != "All" and not summary_df.empty and "Workflow" in summary_df.columns:
+        summary_df = summary_df[summary_df["Workflow"] == workflow_filter]
+
+    chart = build_trend_chart(history_df, workflow_filter)
     timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
     return chart, summary_df, timestamp
 
@@ -210,18 +274,31 @@ with demo:
     gr.Markdown(INTRODUCTION_TEXT, elem_classes="markdown-text")
 
     with gr.Tabs(elem_classes="tab-buttons") as tabs:
-        with gr.TabItem("🏅 LLM Benchmark", elem_id="llm-benchmark-tab-table", id=0):
+        with gr.TabItem("🏅 Single-Agent Benchmark", elem_id="llm-benchmark-tab-table", id=0):
             leaderboard = init_leaderboard(LEADERBOARD_DF)
 
-        with gr.TabItem("📈 Trends", elem_id="llm-benchmark-tab-trends", id=1):
+        with gr.TabItem("🤝 Multi-Agent Benchmark", elem_id="multi-agent-benchmark-tab-table", id=1):
+            leaderboard_multi = init_leaderboard(LEADERBOARD_DF_MULTI)
+
+        with gr.TabItem("📈 Trends", elem_id="llm-benchmark-tab-trends", id=2):
             gr.Markdown(
                 "### Performance Trends\n"
-                "Track how model scores change over time. "
+                "Track how model scores change over time across workflows. "
                 "Averages are computed over available evaluation days within each window. "
-                "The *(N/M)* annotation shows how many days of data were available.",
+                "The *(N/M)* annotation shows how many days of data were available.\n\n"
+                "When viewing **All** workflows, single-agent results are shown with solid lines "
+                "and multi-agent results with dashed lines.",
                 elem_classes="markdown-text",
             )
             with gr.Row():
+                workflow_filter = gr.Dropdown(
+                    choices=["All", "single_agent", "multi_agent"],
+                    value="All",
+                    label="Workflow",
+                    interactive=True,
+                    scale=0,
+                    min_width=180,
+                )
                 refresh_btn = gr.Button("🔄 Refresh", scale=0, min_width=120)
                 last_updated_box = gr.Textbox(
                     label="Last updated",
@@ -236,9 +313,17 @@ with demo:
                 interactive=False,
             )
 
+            # Workflow filter change updates chart and table
+            workflow_filter.change(
+                fn=refresh_trend_data,
+                inputs=[workflow_filter],
+                outputs=[trend_chart, trend_table, last_updated_box],
+            )
+
             # Manual refresh on button click
             refresh_btn.click(
                 fn=refresh_trend_data,
+                inputs=[workflow_filter],
                 outputs=[trend_chart, trend_table, last_updated_box],
             )
 
@@ -246,13 +331,14 @@ with demo:
             trend_timer = gr.Timer(value=600)
             trend_timer.tick(
                 fn=refresh_trend_data,
+                inputs=[workflow_filter],
                 outputs=[trend_chart, trend_table, last_updated_box],
             )
 
-        with gr.TabItem("📝 About", elem_id="llm-benchmark-tab-table", id=2):
+        with gr.TabItem("📝 About", elem_id="llm-benchmark-tab-table", id=3):
             gr.Markdown(LLM_BENCHMARKS_TEXT, elem_classes="markdown-text")
 
-        with gr.TabItem("🚀 Submit here! ", elem_id="llm-benchmark-tab-table", id=3):
+        with gr.TabItem("🚀 Submit here! ", elem_id="llm-benchmark-tab-table", id=4):
             with gr.Column():
                 with gr.Row():
                     gr.Markdown(EVALUATION_QUEUE_TEXT, elem_classes="markdown-text")
@@ -323,6 +409,13 @@ with demo:
                         interactive=True,
                     )
                     base_model_name_textbox = gr.Textbox(label="Base model (for delta or adapter weights)")
+                    workflow_type = gr.Dropdown(
+                        choices=["Both", "single_agent", "multi_agent"],
+                        label="Workflow",
+                        multiselect=False,
+                        value="Both",
+                        interactive=True,
+                    )
 
             submit_button = gr.Button("Submit Eval")
             submission_result = gr.Markdown()
@@ -335,6 +428,7 @@ with demo:
                     precision,
                     weight_type,
                     model_type,
+                    workflow_type,
                 ],
                 submission_result,
             )
