@@ -7,8 +7,6 @@ from datetime import datetime, timedelta, timezone
 import huggingface_hub
 from huggingface_hub import ModelCard
 from huggingface_hub.hf_api import ModelInfo
-from transformers import AutoConfig
-from transformers.models.auto.tokenization_auto import AutoTokenizer
 
 def check_model_card(repo_id: str) -> tuple[bool, str]:
     """Checks if the model card and license exist and have been filled"""
@@ -33,6 +31,9 @@ def check_model_card(repo_id: str) -> tuple[bool, str]:
 
 def is_model_on_hub(model_name: str, revision: str, token: str = None, trust_remote_code=False, test_tokenizer=False) -> tuple[bool, str]:
     """Checks if the model model_name is on the hub, and whether it (and its tokenizer) can be loaded with AutoClasses."""
+    from transformers import AutoConfig
+    from transformers import AutoTokenizer
+
     try:
         config = AutoConfig.from_pretrained(model_name, revision=revision, trust_remote_code=trust_remote_code, token=token)
         if test_tokenizer:

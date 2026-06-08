@@ -5,13 +5,21 @@ import os
 import re
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+from functools import lru_cache
 
 import dateutil
 import numpy as np
 
 from src.display.formatting import make_clickable_model
 from src.display.utils import AutoEvalColumn, ModelType, Tasks, Precision, WeightType
-from src.submission.check_validity import is_model_on_hub
+
+# re-export for convenience
+__all__ = [
+    "EvalResult",
+    "clear_eval_cache",
+    "get_all_eval_results",
+    "get_raw_eval_results",
+]
 
 
 @dataclass
@@ -60,28 +68,13 @@ class EvalResult:
             result_key = f"{org}_{model}_{precision.value.name}"
         full_model = "/".join(org_and_model)
 
-        # Check if model is on HF Hub. API-only models (OpenAI, Anthropic,
-        # Google, etc.) won't have HF Hub pages, so we skip the check for
-        # known API providers and default to still_on_hub=True.
-        API_ONLY_ORGS = {"openai", "anthropic", "google", "meta", "cohere", "mistral"}
+        # Default to still_on_hub=True.  The is_model_on_hub() check is
+        # skipped at load time because it makes a blocking HTTP request to
+        # the HF Hub for every result file, which dramatically slows down
+        # startup and refresh cycles on HF Spaces.  The check is only
+        # meaningful at submission time (handled in submit.py).
         still_on_hub = True
         architecture = "?"
-        model_org = (org or "").lower()
-        if model_org not in API_ONLY_ORGS:
-            try:
-                on_hub, _, model_config = is_model_on_hub(
-                    full_model,
-                    config.get("model_sha", "main"),
-                    trust_remote_code=True,
-                    test_tokenizer=False,
-                )
-                still_on_hub = on_hub
-                if model_config is not None:
-                    architectures = getattr(model_config, "architectures", None)
-                    if architectures:
-                        architecture = ";".join(architectures)
-            except Exception:
-                pass
 
         # Extract results available in this file (some results are split in several files)
         results = {}
@@ -230,8 +223,18 @@ def get_request_file_for_model(requests_path, model_name, precision):
     return request_file
 
 
+def clear_eval_cache() -> None:
+    """Clear the cached evaluation results so the next call reloads from disk."""
+    _load_all_eval_results.cache_clear()
+
+
+@lru_cache(maxsize=8)
 def _load_all_eval_results(results_path: str, requests_path: str) -> list[EvalResult]:
     """Load every result JSON file under *results_path* as an EvalResult.
+
+    Results are cached by (results_path, requests_path) so that repeated
+    calls during startup / refresh don't re-read and re-parse the same
+    files.  Call ``clear_eval_cache()`` before refreshing from new data.
 
     Unlike the previous implementation this does **not** deduplicate by
     eval_name — it returns one ``EvalResult`` per file so that callers
@@ -285,7 +288,7 @@ def get_raw_eval_results(results_path: str, requests_path: str) -> list[EvalResu
     date ``""`` which sorts before any real date, so a dated file will
     always win.
     """
-    all_results = _load_all_eval_results(results_path, requests_path)
+    all_results = list(_load_all_eval_results(results_path, requests_path))
 
     # Keep only the latest per eval_name
     latest: dict[str, EvalResult] = {}
@@ -303,4 +306,4 @@ def get_all_eval_results(results_path: str, requests_path: str) -> list[EvalResu
     Used by the aggregation layer to compute 1-day / 3-day / 7-day
     averages and to build trend charts.
     """
-    return _load_all_eval_results(results_path, requests_path)
+    return list(_load_all_eval_results(results_path, requests_path))

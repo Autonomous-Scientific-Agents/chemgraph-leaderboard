@@ -35,7 +35,18 @@ NUM_FEWSHOT = 0  # Change with your few shot
 
 
 # Your leaderboard name
-TITLE = """<h1 align="center" id="space-title">ChemGraph Leaderboard</h1>"""
+TITLE = """
+<div id="cg-title-banner">
+    <h1>ChemGraph Leaderboard</h1>
+    <p class="cg-subtitle">Evaluating Agentic AI for Computational Chemistry & Materials Science</p>
+    <div class="cg-badge-row">
+        <span class="cg-badge">40 Queries</span>
+        <span class="cg-badge">12 Categories</span>
+        <span class="cg-badge">Daily Evaluation</span>
+        <span class="cg-badge">Single & Multi-Agent</span>
+    </div>
+</div>
+"""
 
 # What does your leaderboard evaluate?
 INTRODUCTION_TEXT = """

@@ -41,6 +41,7 @@ from src.envs import (
     get_eval_results_path,
     get_eval_requests_path,
 )
+from src.leaderboard.read_evals import clear_eval_cache
 from src.populate import (
     get_evaluation_queue_df,
     get_leaderboard_df,
@@ -205,6 +206,24 @@ def build_trend_chart(history_df: pd.DataFrame, workflow_filter: str = "All"):
     return fig
 
 
+def filter_trend_data(workflow_filter: str = "All"):
+    """Filter the already-loaded trend data in memory (no re-download).
+
+    Used by the workflow dropdown so that switching filters is instant.
+    """
+    global TREND_HISTORY_DF, TREND_SUMMARY_DF
+
+    summary_df = TREND_SUMMARY_DF.copy() if not TREND_SUMMARY_DF.empty else pd.DataFrame()
+    history_df = TREND_HISTORY_DF
+
+    if workflow_filter != "All" and not summary_df.empty and "Workflow" in summary_df.columns:
+        summary_df = summary_df[summary_df["Workflow"] == workflow_filter]
+
+    chart = build_trend_chart(history_df, workflow_filter)
+    timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+    return chart, summary_df, timestamp
+
+
 def refresh_trend_data(workflow_filter: str = "All"):
     """Re-download eval results from HF Hub and recompute trend data.
 
@@ -212,24 +231,24 @@ def refresh_trend_data(workflow_filter: str = "All"):
     last-updated timestamp string.  Errors during download or computation
     are caught so the UI never crashes.
     """
+    global TREND_HISTORY_DF, TREND_SUMMARY_DF
+
     try:
         if not LOCAL_MODE:
             download_with_retry(RESULTS_REPO, EVAL_RESULTS_PATH, "eval results")
 
-        summary_df = get_combined_trend_summary_df(EVAL_RESULTS_PATH, EVAL_REQUESTS_PATH)
-        history_df = get_combined_trend_history_df(EVAL_RESULTS_PATH, EVAL_REQUESTS_PATH)
+        # Clear the evaluation cache so fresh data is loaded from disk.
+        clear_eval_cache()
+
+        TREND_SUMMARY_DF = get_combined_trend_summary_df(EVAL_RESULTS_PATH, EVAL_REQUESTS_PATH)
+        TREND_HISTORY_DF = get_combined_trend_history_df(EVAL_RESULTS_PATH, EVAL_REQUESTS_PATH)
     except Exception as e:
         print(f"WARNING: Failed to refresh trend data: {e}")
-        summary_df = pd.DataFrame()
-        history_df = pd.DataFrame()
+        TREND_SUMMARY_DF = pd.DataFrame()
+        TREND_HISTORY_DF = pd.DataFrame()
 
-    # Filter summary table if a specific workflow is selected
-    if workflow_filter != "All" and not summary_df.empty and "Workflow" in summary_df.columns:
-        summary_df = summary_df[summary_df["Workflow"] == workflow_filter]
-
-    chart = build_trend_chart(history_df, workflow_filter)
-    timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
-    return chart, summary_df, timestamp
+    # Delegate to the lightweight filter function for the current view.
+    return filter_trend_data(workflow_filter)
 
 
 def init_leaderboard(dataframe):
@@ -271,7 +290,7 @@ def init_leaderboard(dataframe):
 demo = gr.Blocks(css=custom_css)
 with demo:
     gr.HTML(TITLE)
-    gr.Markdown(INTRODUCTION_TEXT, elem_classes="markdown-text")
+    gr.Markdown(INTRODUCTION_TEXT, elem_classes="markdown-text", elem_id="cg-intro-block")
 
     with gr.Tabs(elem_classes="tab-buttons") as tabs:
         with gr.TabItem("🏅 Single-Agent Benchmark", elem_id="llm-benchmark-tab-table", id=0):
@@ -289,8 +308,9 @@ with demo:
                 "When viewing **All** workflows, single-agent results are shown with solid lines "
                 "and multi-agent results with dashed lines.",
                 elem_classes="markdown-text",
+                elem_id="cg-trends-header",
             )
-            with gr.Row():
+            with gr.Row(elem_id="cg-trend-controls"):
                 workflow_filter = gr.Dropdown(
                     choices=["All", "single_agent", "multi_agent"],
                     value="All",
@@ -299,23 +319,24 @@ with demo:
                     scale=0,
                     min_width=180,
                 )
-                refresh_btn = gr.Button("🔄 Refresh", scale=0, min_width=120)
+                refresh_btn = gr.Button("🔄 Refresh", scale=0, min_width=120, elem_id="cg-refresh-btn")
                 last_updated_box = gr.Textbox(
                     label="Last updated",
                     value=datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC"),
                     interactive=False,
                     scale=1,
                 )
-            trend_chart = gr.Plot(value=build_trend_chart(TREND_HISTORY_DF))
-            gr.Markdown("### Summary: 1-Day / 3-Day / 7-Day Averages")
+            trend_chart = gr.Plot(value=build_trend_chart(TREND_HISTORY_DF), elem_id="cg-trend-chart")
+            gr.Markdown("### Summary: 1-Day / 3-Day / 7-Day Averages", elem_id="cg-trend-summary-label")
             trend_table = gr.Dataframe(
                 value=TREND_SUMMARY_DF,
                 interactive=False,
+                elem_id="cg-trend-summary",
             )
 
-            # Workflow filter change updates chart and table
+            # Workflow filter change — just re-filter in memory (no re-download)
             workflow_filter.change(
-                fn=refresh_trend_data,
+                fn=filter_trend_data,
                 inputs=[workflow_filter],
                 outputs=[trend_chart, trend_table, last_updated_box],
             )
@@ -327,26 +348,25 @@ with demo:
                 outputs=[trend_chart, trend_table, last_updated_box],
             )
 
-            # Auto-refresh every 10 minutes (600 seconds)
-            trend_timer = gr.Timer(value=600)
-            trend_timer.tick(
-                fn=refresh_trend_data,
-                inputs=[workflow_filter],
-                outputs=[trend_chart, trend_table, last_updated_box],
-            )
+            # Auto-refresh removed: the BackgroundScheduler restarts the Space
+            # every 6 hours, which reloads all data fresh.  The hourly
+            # gr.Timer was calling snapshot_download() which blocks a worker
+            # and can freeze the UI on resource-constrained Spaces.  Users
+            # can still click the Refresh button for on-demand updates.
 
         with gr.TabItem("📝 About", elem_id="llm-benchmark-tab-table", id=3):
-            gr.Markdown(LLM_BENCHMARKS_TEXT, elem_classes="markdown-text")
+            gr.Markdown(LLM_BENCHMARKS_TEXT, elem_classes="markdown-text", elem_id="cg-about-content")
 
         with gr.TabItem("🚀 Submit here! ", elem_id="llm-benchmark-tab-table", id=4):
             with gr.Column():
                 with gr.Row():
-                    gr.Markdown(EVALUATION_QUEUE_TEXT, elem_classes="markdown-text")
+                    gr.Markdown(EVALUATION_QUEUE_TEXT, elem_classes="markdown-text", elem_id="cg-submit-guide")
 
                 with gr.Column():
                     with gr.Accordion(
                         f"✅ Finished Evaluations ({len(finished_eval_queue_df)})",
                         open=False,
+                        elem_classes="cg-queue-accordion",
                     ):
                         with gr.Row():
                             finished_eval_table = gr.components.Dataframe(
@@ -358,6 +378,7 @@ with demo:
                     with gr.Accordion(
                         f"🔄 Running Evaluation Queue ({len(running_eval_queue_df)})",
                         open=False,
+                        elem_classes="cg-queue-accordion",
                     ):
                         with gr.Row():
                             running_eval_table = gr.components.Dataframe(
@@ -370,6 +391,7 @@ with demo:
                     with gr.Accordion(
                         f"⏳ Pending Evaluation Queue ({len(pending_eval_queue_df)})",
                         open=False,
+                        elem_classes="cg-queue-accordion",
                     ):
                         with gr.Row():
                             pending_eval_table = gr.components.Dataframe(
@@ -379,7 +401,7 @@ with demo:
                                 row_count=5,
                             )
             with gr.Row():
-                gr.Markdown("# ✉️✨ Submit your model here!", elem_classes="markdown-text")
+                gr.Markdown("# ✉️✨ Submit your model here!", elem_classes="markdown-text", elem_id="cg-submit-heading")
 
             with gr.Row():
                 with gr.Column():
@@ -417,7 +439,7 @@ with demo:
                         interactive=True,
                     )
 
-            submit_button = gr.Button("Submit Eval")
+            submit_button = gr.Button("Submit Eval", elem_id="cg-submit-btn")
             submission_result = gr.Markdown()
             submit_button.click(
                 add_new_eval,
@@ -433,7 +455,7 @@ with demo:
                 submission_result,
             )
 
-    with gr.Row():
+    with gr.Row(elem_id="cg-citation-section"):
         with gr.Accordion("📙 Citation", open=False):
             citation_button = gr.Textbox(
                 value=CITATION_BUTTON_TEXT,
@@ -445,7 +467,7 @@ with demo:
 
 if not LOCAL_MODE:
     scheduler = BackgroundScheduler()
-    scheduler.add_job(restart_space, "interval", seconds=1800)
+    scheduler.add_job(restart_space, "interval", seconds=21600)  # every 6 hours
     scheduler.start()
 
-demo.queue(default_concurrency_limit=40).launch()
+demo.queue(default_concurrency_limit=4).launch(ssr_mode=False)
