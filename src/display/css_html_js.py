@@ -366,11 +366,20 @@ custom_css = """
     padding: 0 !important;
 }
 
-/* Compact field labels inside zones. */
-#cg-trend-controls .cg-zone label > span:first-child {
-    font-size: 0.78rem !important;
+/* Uniform field-title size for every control in the Trends panel.
+   Gradio uses different wrappers for different control types:
+     - single-value Dropdown (Workflow): <div.container> > <span>
+     - multiselect Dropdown (Models)   : <label.container> > <span>
+     - Textbox (Last updated)          : <label.container> > <span>
+     - Radio items (Past week/...)     : <label> > <span> (these are
+       option labels, not the field title — left alone)
+   The field-title span carries class svelte-g2oxp3 in all three
+   wrapper variants, so target it directly to get one consistent size. */
+#cg-trend-controls .cg-zone .container > span.svelte-g2oxp3 {
+    font-size: 0.875rem !important;   /* 14px @ default root */
     color: var(--cg-text-secondary) !important;
     font-weight: 500 !important;
+    line-height: 1.2 !important;
 }
 
 /* The radio (Date range) — chip-row instead of stacked. */
