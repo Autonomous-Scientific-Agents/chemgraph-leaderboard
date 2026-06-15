@@ -331,7 +331,7 @@ custom_css = """
 
 /* Trends controls — one bordered card with three zones (Data / View /
    Actions) separated by thin vertical dividers. */
-#cg-trend-controls {
+.cg-controls-row {
     background: var(--cg-surface) !important;
     border: 1px solid var(--cg-border) !important;
     border-radius: var(--cg-radius-sm) !important;
@@ -341,7 +341,7 @@ custom_css = """
     align-items: stretch !important;
 }
 
-#cg-trend-controls .cg-zone {
+.cg-controls-row .cg-zone {
     padding: 0 1rem !important;
     border-left: 1px solid var(--cg-border-light);
     display: flex !important;
@@ -349,17 +349,17 @@ custom_css = """
     gap: 0.55rem !important;
     min-width: 0 !important;
 }
-#cg-trend-controls .cg-zone:first-child {
+.cg-controls-row .cg-zone:first-child {
     border-left: 0;
     padding-left: 0 !important;
 }
-#cg-trend-controls .cg-zone:last-child {
+.cg-controls-row .cg-zone:last-child {
     padding-right: 0 !important;
 }
 
 /* Zone-internal blocks blend into the card. */
-#cg-trend-controls .cg-zone .block,
-#cg-trend-controls .cg-zone .form {
+.cg-controls-row .cg-zone .block,
+.cg-controls-row .cg-zone .form {
     background: transparent !important;
     border: 0 !important;
     box-shadow: none !important;
@@ -375,7 +375,7 @@ custom_css = """
        option labels, not the field title — left alone)
    The field-title span carries class svelte-g2oxp3 in all three
    wrapper variants, so target it directly to get one consistent size. */
-#cg-trend-controls .cg-zone .container > span.svelte-g2oxp3 {
+.cg-controls-row .cg-zone .container > span.svelte-g2oxp3 {
     font-size: 0.875rem !important;   /* 14px @ default root */
     color: var(--cg-text-secondary) !important;
     font-weight: 500 !important;
@@ -383,17 +383,18 @@ custom_css = """
 }
 
 /* The radio (Date range) — chip-row instead of stacked. */
-#cg-trend-controls .cg-zone-view .wrap {
+.cg-controls-row .cg-zone-view .wrap {
     display: flex !important;
     flex-wrap: wrap !important;
     gap: 0.35rem !important;
 }
 
 /* From/To date pickers — compact native-date inputs side by side. */
-#cg-trend-date-range {
+#cg-trend-date-range,
+#cg-family-date-range {
     gap: 0.5rem !important;
 }
-#cg-trend-date-range .cg-date-input input {
+.cg-date-input input {
     font-size: 0.82rem !important;
     padding: 0.25rem 0.4rem !important;
 }
@@ -403,27 +404,27 @@ custom_css = """
    or bottom border. Scoped to dropdowns that have .token children
    (the multiselect) so the single-value Workflow dropdown keeps its
    default compact height. */
-#cg-trend-controls .cg-zone-data .gradio-dropdown[data-testid="dropdown"] .wrap:has(.token) {
+.cg-controls-row .cg-zone-data .gradio-dropdown[data-testid="dropdown"] .wrap:has(.token) {
     min-height: 51px !important;
     padding: 0 0.4rem !important;
     overflow: hidden !important;
 }
-#cg-trend-controls .cg-zone-data .wrap:has(.token):hover,
-#cg-trend-controls .cg-zone-data .wrap:has(.token):focus-within {
+.cg-controls-row .cg-zone-data .wrap:has(.token):hover,
+.cg-controls-row .cg-zone-data .wrap:has(.token):focus-within {
     overflow-x: auto !important;
 }
-#cg-trend-controls .cg-zone-data .wrap:has(.token) .wrap-inner {
+.cg-controls-row .cg-zone-data .wrap:has(.token) .wrap-inner {
     flex-wrap: nowrap !important;
     overflow: visible !important;
     padding: 8px 6px !important;
     align-items: center !important;
 }
-#cg-trend-controls .cg-zone-data .wrap:has(.token) .wrap-inner .token {
+.cg-controls-row .cg-zone-data .wrap:has(.token) .wrap-inner .token {
     flex-shrink: 0 !important;
 }
 
 /* Refresh button — compact outline pill using the theme primary. */
-#cg-trend-controls .cg-zone-actions button {
+.cg-controls-row .cg-zone-actions button {
     background: var(--cg-surface) !important;
     color: var(--cg-primary) !important;
     border: 1px solid var(--cg-primary) !important;
@@ -437,16 +438,17 @@ custom_css = """
     align-self: flex-start;
     transition: all 0.15s ease;
 }
-#cg-trend-controls .cg-zone-actions button:hover {
+.cg-controls-row .cg-zone-actions button:hover {
     background: var(--cg-primary) !important;
     color: #fff !important;
     box-shadow: var(--cg-shadow-sm) !important;
 }
-#cg-trend-controls .cg-zone-actions button:active {
+.cg-controls-row .cg-zone-actions button:active {
     transform: translateY(1px);
 }
 
-#cg-trend-chart {
+#cg-trend-chart,
+#cg-family-chart {
     border: 1px solid var(--cg-border) !important;
     border-radius: var(--cg-radius) !important;
     box-shadow: var(--cg-shadow-sm) !important;
@@ -457,20 +459,23 @@ custom_css = """
     background: var(--cg-surface) !important;
 }
 
-#cg-trend-summary-label h3 {
+#cg-trend-summary-label h3,
+#cg-family-summary-label h3 {
     color: var(--cg-primary) !important;
     font-weight: 600 !important;
     font-size: 1.05rem !important;
 }
 
-#cg-trend-summary {
+#cg-trend-summary,
+#cg-family-summary {
     border: 1px solid var(--cg-border) !important;
     border-radius: var(--cg-radius) !important;
     box-shadow: var(--cg-shadow-sm) !important;
     overflow: hidden !important;
 }
 
-#cg-trend-summary table thead th {
+#cg-trend-summary table thead th,
+#cg-family-summary table thead th {
     background: var(--cg-surface-alt) !important;
     font-weight: 600 !important;
     font-size: 0.82rem !important;
@@ -480,11 +485,13 @@ custom_css = """
     border-bottom: 2px solid var(--cg-border) !important;
 }
 
-#cg-trend-summary table tbody tr:nth-child(even) {
+#cg-trend-summary table tbody tr:nth-child(even),
+#cg-family-summary table tbody tr:nth-child(even) {
     background: var(--cg-surface-alt) !important;
 }
 
-#cg-trend-summary table tbody tr:hover td {
+#cg-trend-summary table tbody tr:hover td,
+#cg-family-summary table tbody tr:hover td {
     background: var(--cg-surface-hover) !important;
 }
 
@@ -914,29 +921,34 @@ group_columns_head = r"""
   // type is enough because the value still flows through the textbox
   // 'input' event, so Python-side change handlers fire normally.
   function upgradeDateInputs() {
-    const bounds = document.getElementById("cg-trend-date-bounds");
-    const minDate = bounds ? bounds.dataset.min : "";
-    const maxDate = bounds ? bounds.dataset.max : "";
-    ["cg-trend-from", "cg-trend-to"].forEach(id => {
-      const wrap = document.getElementById(id);
-      if (!wrap || wrap.dataset.cgDated === "1") return;
-      const input = wrap.querySelector("input, textarea");
-      if (!input) return;
-      // Replace <textarea> with an <input> if Gradio rendered one.
-      let target = input;
-      if (input.tagName === "TEXTAREA") {
-        target = document.createElement("input");
-        target.value = input.value;
-        for (const a of input.attributes) {
-          if (a.name === "rows") continue;
-          target.setAttribute(a.name, a.value);
+    const pairs = [
+      { ids: ["cg-trend-from", "cg-trend-to"], boundsId: "cg-trend-date-bounds" },
+      { ids: ["cg-fam-from",   "cg-fam-to"  ], boundsId: "cg-fam-date-bounds"   },
+    ];
+    pairs.forEach(({ ids, boundsId }) => {
+      const bounds = document.getElementById(boundsId);
+      const minDate = bounds ? bounds.dataset.min : "";
+      const maxDate = bounds ? bounds.dataset.max : "";
+      ids.forEach(id => {
+        const wrap = document.getElementById(id);
+        if (!wrap || wrap.dataset.cgDated === "1") return;
+        const input = wrap.querySelector("input, textarea");
+        if (!input) return;
+        let target = input;
+        if (input.tagName === "TEXTAREA") {
+          target = document.createElement("input");
+          target.value = input.value;
+          for (const a of input.attributes) {
+            if (a.name === "rows") continue;
+            target.setAttribute(a.name, a.value);
+          }
+          input.replaceWith(target);
         }
-        input.replaceWith(target);
-      }
-      target.type = "date";
-      if (minDate) target.min = minDate;
-      if (maxDate) target.max = maxDate;
-      wrap.dataset.cgDated = "1";
+        target.type = "date";
+        if (minDate) target.min = minDate;
+        if (maxDate) target.max = maxDate;
+        wrap.dataset.cgDated = "1";
+      });
     });
   }
 

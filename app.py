@@ -128,6 +128,45 @@ except Exception as e:
     pending_eval_queue_df = _empty_queue.copy()
 
 
+def _all_families(history_df: pd.DataFrame) -> list[str]:
+    """Sorted list of model families (the org slug part of full_name)."""
+    if history_df is None or history_df.empty or "model" not in history_df.columns:
+        return []
+    fams = (
+        history_df["model"]
+        .dropna()
+        .astype(str)
+        .str.split("/", n=1).str[0]
+        .unique()
+        .tolist()
+    )
+    return sorted(fams)
+
+
+# Parse a vaguely-versioned model name into a comparable release-order
+# tuple. We don't know real release dates, so we synthesize an order from
+# the version-like tokens in the name itself: bigger version → later.
+# Examples:
+#   "openai/gpt-4.1-nano"        -> (4, 1, 0, 0, 0, ...,  "openai/gpt-4.1-nano")
+#   "openai/gpt-5.4"             -> (5, 4)
+#   "anthropic/claude-opus-4.6"  -> (4, 6)
+#   "anthropic/claude-3.5-haiku" -> (3, 5)
+import re as _re
+_VERSION_TOKEN = _re.compile(r"\d+(?:\.\d+)*")
+def _release_sort_key(model_full: str):
+    nums = []
+    for tok in _VERSION_TOKEN.findall(model_full or ""):
+        for part in tok.split("."):
+            try:
+                nums.append(int(part))
+            except ValueError:
+                pass
+    # Pad so tuples sort consistently even when version depths differ.
+    while len(nums) < 4:
+        nums.append(0)
+    return (*nums, model_full or "")
+
+
 def _all_models(history_df: pd.DataFrame) -> list[str]:
     """Sorted list of every model that has at least one history row."""
     if history_df is None or history_df.empty or "model" not in history_df.columns:
@@ -172,6 +211,213 @@ def _data_date_bounds(df: pd.DataFrame):
     if dates.empty:
         return "", ""
     return dates.min().strftime("%Y-%m-%d"), dates.max().strftime("%Y-%m-%d")
+
+
+# Tasks the user can pick in the Family chart. "Average" stays as a
+# synthetic option pointing at the overall column; the rest are the
+# per-category accuracy columns produced by aggregate.py.
+def _family_task_choices() -> list[str]:
+    from src.about import Tasks  # local import to avoid pulling at module top
+    return ["Average"] + [t.value.col_name for t in Tasks]
+
+
+def _family_window_stats(
+    history_df: pd.DataFrame,
+    family: str,
+    workflow_filter: str,
+    date_from: str,
+    date_to: str,
+    tasks: list[str] | None = None,
+) -> pd.DataFrame:
+    """Long-form stats: one row per (Model, Workflow, Task) in the window.
+
+    Columns: Model, Workflow, Task, #Days, Score, Std.
+    """
+    cols = ["Model", "Workflow", "Task", "#Days", "Score", "Std"]
+    if history_df is None or history_df.empty:
+        return pd.DataFrame(columns=cols)
+    if not tasks:
+        tasks = ["Average"]
+
+    df = history_df.copy()
+    if workflow_filter != "All" and "workflow" in df.columns:
+        df = df[df["workflow"] == workflow_filter]
+    df = _apply_date_range(df, date_from, date_to)
+    if df.empty:
+        return pd.DataFrame(columns=cols)
+
+    df = df[df["model"].astype(str).str.startswith(f"{family}/")]
+    if df.empty:
+        return pd.DataFrame(columns=cols)
+
+    available = [t for t in tasks if t == "Average" or t in df.columns]
+    if not available:
+        return pd.DataFrame(columns=cols)
+
+    group_cols = ["model"] + (["workflow"] if "workflow" in df.columns else [])
+    rows: list[pd.DataFrame] = []
+    for t in available:
+        col = "average" if t == "Average" else t
+        if col not in df.columns:
+            continue
+        agg = (
+            df.dropna(subset=[col])
+            .groupby(group_cols, dropna=False)[col]
+            .agg(["count", "mean", "std"])
+            .reset_index()
+            .rename(columns={
+                "model": "Model",
+                "workflow": "Workflow",
+                "count": "#Days",
+                "mean": "Score",
+                "std": "Std",
+            })
+        )
+        if agg.empty:
+            continue
+        if "Workflow" not in agg.columns:
+            agg["Workflow"] = ""
+        agg["Task"] = t
+        agg["Std"] = agg["Std"].fillna(0.0)
+        rows.append(agg)
+
+    if not rows:
+        return pd.DataFrame(columns=cols)
+
+    out = pd.concat(rows, ignore_index=True)
+    for c in ("Score", "Std"):
+        out[c] = out[c].round(2)
+    out["__order"] = out["Model"].map(_release_sort_key)
+    out = out.sort_values(["__order", "Workflow", "Task"]).drop(columns="__order")
+    return out[cols].reset_index(drop=True)
+
+
+def build_family_chart(
+    history_df: pd.DataFrame,
+    family: str,
+    workflow_filter: str = "All",
+    date_from: str = "",
+    date_to: str = "",
+    tasks: list[str] | None = None,
+):
+    """Bar chart: X = models (release order), one colored bar per task,
+    error bar = std over the window."""
+    if not tasks:
+        tasks = ["Average"]
+    stats = _family_window_stats(
+        history_df, family, workflow_filter, date_from, date_to, tasks
+    )
+    if stats.empty:
+        fig = px.bar(title=f"No data for family '{family}' in the selected range")
+        fig.update_layout(xaxis_title="Model", yaxis_title="Score (%)")
+        return fig
+
+    stats = stats.copy()
+    stats["Label"] = stats["Model"].str.replace(f"{family}/", "", regex=False)
+    # Preserve release-order for the X axis categorical.
+    label_order = (
+        stats.drop_duplicates("Label")
+        .assign(__o=lambda d: d["Model"].map(_release_sort_key))
+        .sort_values("__o")["Label"]
+        .tolist()
+    )
+    # Preserve task selection order for legend / cluster order.
+    task_order = [t for t in tasks if t in stats["Task"].unique()]
+
+    # When workflow=All, draw two bars per (model, task): solid for
+    # single_agent, diagonal pattern for multi_agent.
+    workflows_present = (
+        stats["Workflow"].dropna().unique().tolist()
+        if "Workflow" in stats.columns else []
+    )
+    use_pattern = workflow_filter == "All" and len(workflows_present) > 1
+    chart_kwargs = dict(
+        x="Label",
+        y="Score",
+        color="Task",
+        error_y="Std",
+        barmode="group",
+        category_orders={"Label": label_order, "Task": task_order},
+        title=f"{family} — score by task over selected range",
+        labels={"Label": "Model (release order →)", "Score": "Score (%)"},
+    )
+    if use_pattern:
+        chart_kwargs["pattern_shape"] = "Workflow"
+        chart_kwargs["pattern_shape_sequence"] = ["", "/"]  # solid, diagonal
+        chart_kwargs["category_orders"]["Workflow"] = ["single_agent", "multi_agent"]
+    fig = px.bar(stats, **chart_kwargs)
+    # Y range considers the top of the error bars (mean + std), not
+    # just the mean, so the cap doesn't clip a sticking-up whisker.
+    # Allow the upper limit to drift above 100 a few percent so chart
+    # never feels claustrophobic when bars hug the ceiling.
+    upper = (stats["Score"] + stats["Std"]).dropna()
+    lower = (stats["Score"] - stats["Std"]).dropna()
+    if not upper.empty:
+        y_min = float(lower.min())
+        y_max = float(upper.max())
+        span = y_max - y_min
+        pad = max(span * 0.15, 4.0)
+        y_range = [max(0.0, y_min - pad), min(110.0, y_max + pad)]
+    else:
+        y_range = None
+    fig.update_layout(
+        xaxis_title="Model (release order →)",
+        yaxis_title="Score (%)",
+        yaxis=dict(range=y_range) if y_range else dict(),
+        legend_title="Task",
+        hovermode="x unified",
+    )
+    return fig
+
+
+def filter_family_data(
+    family: str,
+    workflow_filter: str = "All",
+    date_from: str = "",
+    date_to: str = "",
+    tasks: list[str] | None = None,
+):
+    """Re-render family chart + table from cached history."""
+    chart = build_family_chart(
+        TREND_HISTORY_DF, family, workflow_filter, date_from, date_to, tasks
+    )
+    table = _family_window_stats(
+        TREND_HISTORY_DF, family, workflow_filter, date_from, date_to, tasks
+    )
+    timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+    return chart, table, timestamp
+
+
+def refresh_family_data(
+    family: str,
+    workflow_filter: str = "All",
+    date_from: str = "",
+    date_to: str = "",
+    tasks: list[str] | None = None,
+):
+    """Re-download eval results from HF Hub then re-filter the family view."""
+    global TREND_HISTORY_DF, TREND_SUMMARY_DF
+    try:
+        if not LOCAL_MODE:
+            download_with_retry(RESULTS_REPO, EVAL_RESULTS_PATH, "eval results")
+        clear_eval_cache()
+        TREND_SUMMARY_DF = get_combined_trend_summary_df(EVAL_RESULTS_PATH, EVAL_REQUESTS_PATH)
+        TREND_HISTORY_DF = get_combined_trend_history_df(EVAL_RESULTS_PATH, EVAL_REQUESTS_PATH)
+    except Exception as e:
+        print(f"WARNING: Failed to refresh trend data: {e}")
+        TREND_SUMMARY_DF = pd.DataFrame()
+        TREND_HISTORY_DF = pd.DataFrame()
+    return filter_family_data(family, workflow_filter, date_from, date_to, tasks)
+
+
+def _default_family_window(history_df: pd.DataFrame) -> tuple[str, str]:
+    """Default 'past 7 days' anchored on dataset max date as ISO strings."""
+    _, dmax = _data_date_bounds(history_df)
+    if not dmax:
+        return "", ""
+    end = pd.to_datetime(dmax)
+    start = end - pd.Timedelta(days=6)
+    return start.strftime("%Y-%m-%d"), end.strftime("%Y-%m-%d")
 
 
 def _window_stats(
@@ -428,11 +674,10 @@ with demo:
         with gr.TabItem("📈 Trends", elem_id="llm-benchmark-tab-trends", id=2):
             gr.Markdown(
                 "### Performance Trends\n"
-                "Track how model scores change over time across workflows. "
-                "Averages are computed over available evaluation days within each window. "
-                "The *(N/M)* annotation shows how many days of data were available.\n\n"
-                "When viewing **All** workflows, single-agent results are shown with solid lines "
-                "and multi-agent results with dashed lines.",
+                "Two views: **Over time** tracks how individual models drift "
+                "day-to-day; **Family evolution** lines up models in a family "
+                "by release order so you can see whether newer versions are "
+                "actually better.",
                 elem_classes="markdown-text",
                 elem_id="cg-trends-header",
             )
@@ -445,107 +690,211 @@ with demo:
             )
             _initial_models = _top_n_models(_initial_history, n=3)
             _data_min, _data_max = _data_date_bounds(TREND_HISTORY_DF)
-            with gr.Row(elem_id="cg-trend-controls", equal_height=True):
-                with gr.Column(scale=10, min_width=360, elem_classes="cg-zone cg-zone-data"):
-                    workflow_filter = gr.Dropdown(
-                        choices=["All", "single_agent", "multi_agent"],
-                        value="single_agent",
-                        label="Workflow",
-                        interactive=True,
+            _fam_from_default, _fam_to_default = _default_family_window(TREND_HISTORY_DF)
+            _all_fams = _all_families(TREND_HISTORY_DF)
+            _default_family = "openai" if "openai" in _all_fams else (_all_fams[0] if _all_fams else "")
+
+            with gr.Tabs(elem_classes="tab-buttons", elem_id="cg-trend-subtabs"):
+                # ---------- Sub-tab 1: Over time ----------
+                with gr.TabItem("Over time", id=0):
+                    with gr.Row(elem_id="cg-trend-controls", elem_classes="cg-controls-row", equal_height=True):
+                        with gr.Column(scale=10, min_width=360, elem_classes="cg-zone cg-zone-data"):
+                            workflow_filter = gr.Dropdown(
+                                choices=["All", "single_agent", "multi_agent"],
+                                value="single_agent",
+                                label="Workflow",
+                                interactive=True,
+                            )
+                            model_filter = gr.Dropdown(
+                                choices=_all_models(TREND_HISTORY_DF),
+                                value=_initial_models,
+                                label="Models",
+                                multiselect=True,
+                                interactive=True,
+                            )
+                        with gr.Column(scale=5, min_width=260, elem_classes="cg-zone cg-zone-view"):
+                            with gr.Row(elem_id="cg-trend-date-range"):
+                                date_from = gr.Textbox(
+                                    value=_data_min,
+                                    label="From",
+                                    placeholder="YYYY-MM-DD",
+                                    interactive=True,
+                                    lines=1,
+                                    max_lines=1,
+                                    elem_id="cg-trend-from",
+                                    elem_classes="cg-date-input",
+                                )
+                                date_to = gr.Textbox(
+                                    value=_data_max,
+                                    label="To",
+                                    placeholder="YYYY-MM-DD",
+                                    interactive=True,
+                                    lines=1,
+                                    max_lines=1,
+                                    elem_id="cg-trend-to",
+                                    elem_classes="cg-date-input",
+                                )
+                            gr.HTML(
+                                f'<span id="cg-trend-date-bounds" '
+                                f'data-min="{_data_min}" data-max="{_data_max}" '
+                                f'style="display:none"></span>'
+                            )
+                        with gr.Column(scale=3, min_width=180, elem_classes="cg-zone cg-zone-actions"):
+                            last_updated_box = gr.Textbox(
+                                label="Last updated",
+                                value=datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC"),
+                                interactive=False,
+                            )
+                            refresh_btn = gr.Button(
+                                "🔄 Refresh", size="sm", elem_id="cg-refresh-btn"
+                            )
+                    trend_chart = gr.Plot(
+                        value=build_trend_chart(
+                            TREND_HISTORY_DF,
+                            workflow_filter=_default_workflow,
+                            models=_initial_models,
+                            date_from=_data_min,
+                            date_to=_data_max,
+                        ),
+                        elem_id="cg-trend-chart",
                     )
-                    model_filter = gr.Dropdown(
-                        choices=_all_models(TREND_HISTORY_DF),
-                        value=_initial_models,
-                        label="Models",
-                        multiselect=True,
-                        interactive=True,
+                    gr.Markdown(
+                        "### Window stats (Average / Min / Max / Std over the selected range)",
+                        elem_id="cg-trend-summary-label",
                     )
-                with gr.Column(scale=5, min_width=260, elem_classes="cg-zone cg-zone-view"):
-                    with gr.Row(elem_id="cg-trend-date-range"):
-                        date_from = gr.Textbox(
-                            value=_data_min,
-                            label="From",
-                            placeholder="YYYY-MM-DD",
-                            interactive=True,
-                            lines=1,
-                            max_lines=1,
-                            elem_id="cg-trend-from",
-                            elem_classes="cg-date-input",
-                        )
-                        date_to = gr.Textbox(
-                            value=_data_max,
-                            label="To",
-                            placeholder="YYYY-MM-DD",
-                            interactive=True,
-                            lines=1,
-                            max_lines=1,
-                            elem_id="cg-trend-to",
-                            elem_classes="cg-date-input",
-                        )
-                    # Hidden inputs that carry the dataset min/max to JS
-                    # so it can constrain the native date pickers.
-                    gr.HTML(
-                        f'<span id="cg-trend-date-bounds" '
-                        f'data-min="{_data_min}" data-max="{_data_max}" '
-                        f'style="display:none"></span>'
+                    _initial_summary = _window_stats(
+                        TREND_HISTORY_DF,
+                        _default_workflow,
+                        _initial_models,
+                        _data_min,
+                        _data_max,
                     )
-                with gr.Column(scale=3, min_width=180, elem_classes="cg-zone cg-zone-actions"):
-                    last_updated_box = gr.Textbox(
-                        label="Last updated",
-                        value=datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC"),
+                    trend_table = gr.Dataframe(
+                        value=_initial_summary,
                         interactive=False,
+                        elem_id="cg-trend-summary",
                     )
-                    refresh_btn = gr.Button(
-                        "🔄 Refresh", size="sm", elem_id="cg-refresh-btn"
+
+                    _trend_inputs = [workflow_filter, model_filter, date_from, date_to]
+                    for ctl in (workflow_filter, model_filter, date_from, date_to):
+                        ctl.change(
+                            fn=filter_trend_data,
+                            inputs=_trend_inputs,
+                            outputs=[trend_chart, trend_table, last_updated_box],
+                        )
+                    refresh_btn.click(
+                        fn=refresh_trend_data,
+                        inputs=_trend_inputs,
+                        outputs=[trend_chart, trend_table, last_updated_box],
                     )
-            trend_chart = gr.Plot(
-                value=build_trend_chart(
-                    TREND_HISTORY_DF,
-                    workflow_filter=_default_workflow,
-                    models=_initial_models,
-                    date_from=_data_min,
-                    date_to=_data_max,
-                ),
-                elem_id="cg-trend-chart",
-            )
-            gr.Markdown(
-                "### Window stats (Average / Min / Max / Std over the selected range)",
-                elem_id="cg-trend-summary-label",
-            )
-            _initial_summary = _window_stats(
-                TREND_HISTORY_DF,
-                _default_workflow,
-                _initial_models,
-                _data_min,
-                _data_max,
-            )
-            trend_table = gr.Dataframe(
-                value=_initial_summary,
-                interactive=False,
-                elem_id="cg-trend-summary",
-            )
 
-            # Any control change just re-filters in memory (no re-download)
-            _trend_inputs = [workflow_filter, model_filter, date_from, date_to]
-            for ctl in (workflow_filter, model_filter, date_from, date_to):
-                ctl.change(
-                    fn=filter_trend_data,
-                    inputs=_trend_inputs,
-                    outputs=[trend_chart, trend_table, last_updated_box],
-                )
+                # ---------- Sub-tab 2: Family evolution ----------
+                with gr.TabItem("Family evolution", id=1):
+                    _fam_task_choices = _family_task_choices()
+                    _fam_default_tasks = [
+                        t for t in ("Average", "Reaction Energy")
+                        if t in _fam_task_choices
+                    ]
+                    _fam_default_workflow = "All"
+                    with gr.Row(elem_id="cg-family-controls", elem_classes="cg-controls-row", equal_height=True):
+                        with gr.Column(scale=10, min_width=360, elem_classes="cg-zone cg-zone-data"):
+                            with gr.Row():
+                                family_filter = gr.Dropdown(
+                                    choices=_all_fams,
+                                    value=_default_family,
+                                    label="Family",
+                                    interactive=True,
+                                )
+                                fam_workflow_filter = gr.Dropdown(
+                                    choices=["All", "single_agent", "multi_agent"],
+                                    value=_fam_default_workflow,
+                                    label="Workflow",
+                                    interactive=True,
+                                )
+                            fam_task_filter = gr.Dropdown(
+                                choices=_fam_task_choices,
+                                value=_fam_default_tasks,
+                                label="Tasks",
+                                multiselect=True,
+                                interactive=True,
+                            )
+                        with gr.Column(scale=5, min_width=260, elem_classes="cg-zone cg-zone-view"):
+                            with gr.Row(elem_id="cg-family-date-range"):
+                                fam_date_from = gr.Textbox(
+                                    value=_fam_from_default,
+                                    label="From",
+                                    placeholder="YYYY-MM-DD",
+                                    interactive=True,
+                                    lines=1,
+                                    max_lines=1,
+                                    elem_id="cg-fam-from",
+                                    elem_classes="cg-date-input",
+                                )
+                                fam_date_to = gr.Textbox(
+                                    value=_fam_to_default,
+                                    label="To",
+                                    placeholder="YYYY-MM-DD",
+                                    interactive=True,
+                                    lines=1,
+                                    max_lines=1,
+                                    elem_id="cg-fam-to",
+                                    elem_classes="cg-date-input",
+                                )
+                            gr.HTML(
+                                f'<span id="cg-fam-date-bounds" '
+                                f'data-min="{_data_min}" data-max="{_data_max}" '
+                                f'style="display:none"></span>'
+                            )
+                        with gr.Column(scale=3, min_width=180, elem_classes="cg-zone cg-zone-actions"):
+                            fam_last_updated = gr.Textbox(
+                                label="Last updated",
+                                value=datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC"),
+                                interactive=False,
+                            )
+                            fam_refresh_btn = gr.Button(
+                                "🔄 Refresh", size="sm", elem_id="cg-fam-refresh-btn"
+                            )
+                    family_chart = gr.Plot(
+                        value=build_family_chart(
+                            TREND_HISTORY_DF,
+                            family=_default_family,
+                            workflow_filter=_fam_default_workflow,
+                            date_from=_fam_from_default,
+                            date_to=_fam_to_default,
+                            tasks=_fam_default_tasks,
+                        ),
+                        elem_id="cg-family-chart",
+                    )
+                    gr.Markdown(
+                        "### Family stats (Score ± Std per task, models in release order)",
+                        elem_id="cg-family-summary-label",
+                    )
+                    family_table = gr.Dataframe(
+                        value=_family_window_stats(
+                            TREND_HISTORY_DF,
+                            _default_family,
+                            _fam_default_workflow,
+                            _fam_from_default,
+                            _fam_to_default,
+                            _fam_default_tasks,
+                        ),
+                        interactive=False,
+                        elem_id="cg-family-summary",
+                    )
 
-            # Manual refresh on button click
-            refresh_btn.click(
-                fn=refresh_trend_data,
-                inputs=_trend_inputs,
-                outputs=[trend_chart, trend_table, last_updated_box],
-            )
-
-            # Auto-refresh removed: the BackgroundScheduler restarts the Space
-            # every 6 hours, which reloads all data fresh.  The hourly
-            # gr.Timer was calling snapshot_download() which blocks a worker
-            # and can freeze the UI on resource-constrained Spaces.  Users
-            # can still click the Refresh button for on-demand updates.
+                    _family_inputs = [family_filter, fam_workflow_filter,
+                                      fam_date_from, fam_date_to, fam_task_filter]
+                    for ctl in _family_inputs:
+                        ctl.change(
+                            fn=filter_family_data,
+                            inputs=_family_inputs,
+                            outputs=[family_chart, family_table, fam_last_updated],
+                        )
+                    fam_refresh_btn.click(
+                        fn=refresh_family_data,
+                        inputs=_family_inputs,
+                        outputs=[family_chart, family_table, fam_last_updated],
+                    )
 
         with gr.TabItem("📝 About", elem_id="llm-benchmark-tab-table", id=3):
             gr.Markdown(LLM_BENCHMARKS_TEXT, elem_classes="markdown-text", elem_id="cg-about-content")
