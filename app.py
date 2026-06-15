@@ -17,7 +17,7 @@ from src.about import (
     LLM_BENCHMARKS_TEXT,
     TITLE,
 )
-from src.display.css_html_js import custom_css
+from src.display.css_html_js import custom_css, group_columns_head
 from src.display.utils import (
     BENCHMARK_COLS,
     COLS,
@@ -103,12 +103,7 @@ MULTI_AGENT_RESULTS = get_eval_results_path("multi_agent")
 MULTI_AGENT_REQUESTS = get_eval_requests_path("multi_agent")
 
 LEADERBOARD_DF = get_leaderboard_df(SINGLE_AGENT_RESULTS, SINGLE_AGENT_REQUESTS, COLS, BENCHMARK_COLS)
-if not LEADERBOARD_DF.empty:
-    LEADERBOARD_DF["T"] = range(1, len(LEADERBOARD_DF) + 1)
-
 LEADERBOARD_DF_MULTI = get_leaderboard_df(MULTI_AGENT_RESULTS, MULTI_AGENT_REQUESTS, COLS, BENCHMARK_COLS)
-if not LEADERBOARD_DF_MULTI.empty:
-    LEADERBOARD_DF_MULTI["T"] = range(1, len(LEADERBOARD_DF_MULTI) + 1)
 
 # Load combined trend data for the Trends tab
 try:
@@ -261,33 +256,18 @@ def init_leaderboard(dataframe):
         select_columns=SelectColumns(
             default_selection=[c.name for c in fields(AutoEvalColumn) if c.displayed_by_default],
             cant_deselect=[c.name for c in fields(AutoEvalColumn) if c.never_hidden],
-            label="Select Columns to Display:",
+            label="Columns to display",
         ),
-        search_columns=[AutoEvalColumn.model.name, AutoEvalColumn.license.name],
+        search_columns=[AutoEvalColumn.model.name, AutoEvalColumn.model_family.name],
         hide_columns=[c.name for c in fields(AutoEvalColumn) if c.hidden],
         filter_columns=[
-            ColumnFilter(AutoEvalColumn.model_type.name, type="checkboxgroup", label="Model types"),
-            ColumnFilter(AutoEvalColumn.precision.name, type="checkboxgroup", label="Precision"),
-            ColumnFilter(
-                AutoEvalColumn.params.name,
-                type="slider",
-                min=0.01,
-                max=150,
-                label="Select the number of parameters (B)",
-            ),
-            ColumnFilter(
-                AutoEvalColumn.still_on_hub.name,
-                type="boolean",
-                label="Deleted/incomplete",
-                default=False,
-            ),
+            ColumnFilter(AutoEvalColumn.model_family.name, type="checkboxgroup", label="Model family"),
         ],
-        bool_checkboxgroup_label="Hide models",
         interactive=False,
     )
 
 
-demo = gr.Blocks(css=custom_css)
+demo = gr.Blocks(css=custom_css, head=group_columns_head)
 with demo:
     gr.HTML(TITLE)
     gr.Markdown(INTRODUCTION_TEXT, elem_classes="markdown-text", elem_id="cg-intro-block")

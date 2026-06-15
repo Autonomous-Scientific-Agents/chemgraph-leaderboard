@@ -49,6 +49,7 @@ def get_leaderboard_df(results_path: str, requests_path: str, cols: list, benchm
             df[col_name] = None
 
     df = df.sort_values(by=[AutoEvalColumn.average.name], ascending=False)
+    df[AutoEvalColumn.rank.name] = range(1, len(df) + 1)
     df = df[cols].round(decimals=2)
 
     # filter out if any of the benchmarks have not been produced

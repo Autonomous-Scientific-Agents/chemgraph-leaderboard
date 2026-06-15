@@ -25,33 +25,30 @@ class ColumnContent:
 ## Leaderboard columns
 # Built as a plain class with ColumnContent attributes instead of
 # make_dataclass, which breaks on Python 3.13+ due to mutable defaults.
+#
+# Column groups (order = display order):
+#   1) Identity:  rank (T), Model, Model Family
+#   2) Overall:   Average ⬆️
+#   3) Trends:    1-Day, 3-Day Avg, 7-Day Avg
+#   4) Per-task:  12 task category accuracies (added dynamically below)
 class AutoEvalColumn:
-    # Init
-    model_type_symbol = ColumnContent("T", "str", True, never_hidden=True)
+    # --- Identity ---
+    rank = ColumnContent("T", "number", True, never_hidden=True)
     model = ColumnContent("Model", "markdown", True, never_hidden=True)
-    # Scores
+    # model_family is kept in the DataFrame so the filter still works,
+    # but hidden from the visible table and the column-selector list.
+    model_family = ColumnContent("Model Family", "str", False, hidden=True)
+    # --- Overall score ---
     average = ColumnContent("Average ⬆️", "number", True)
+    # --- Trend columns (1-day, 3-day, 7-day rolling averages) ---
+    one_day = ColumnContent("1-Day", "number", True)
+    three_day_avg = ColumnContent("3-Day Avg", "number", True)
+    seven_day_avg = ColumnContent("7-Day Avg", "number", True)
 
 
-# Dynamically add task columns as class attributes
+# --- Per-task category columns (12) ---
 for _task in Tasks:
     setattr(AutoEvalColumn, _task.name, ColumnContent(_task.value.col_name, "number", True))
-
-# Trend columns (1-day, 3-day, 7-day rolling averages)
-AutoEvalColumn.one_day = ColumnContent("1-Day", "number", True)
-AutoEvalColumn.three_day_avg = ColumnContent("3-Day Avg", "number", True)
-AutoEvalColumn.seven_day_avg = ColumnContent("7-Day Avg", "number", True)
-
-# Model information
-AutoEvalColumn.model_type = ColumnContent("Type", "str", False)
-AutoEvalColumn.architecture = ColumnContent("Architecture", "str", False)
-AutoEvalColumn.weight_type = ColumnContent("Weight type", "str", False, True)
-AutoEvalColumn.precision = ColumnContent("Precision", "str", False)
-AutoEvalColumn.license = ColumnContent("Hub License", "str", False)
-AutoEvalColumn.params = ColumnContent("#Params (B)", "number", False)
-AutoEvalColumn.likes = ColumnContent("Hub ❤️", "number", False)
-AutoEvalColumn.still_on_hub = ColumnContent("Available on the hub", "bool", False)
-AutoEvalColumn.revision = ColumnContent("Model sha", "str", False, False)
 
 
 ## For the queue columns in the submission tab
@@ -114,8 +111,10 @@ class Precision(Enum):
         return Precision.Unknown
 
 
-# Column selection
-COLS = [c.name for c in fields(AutoEvalColumn) if not c.hidden]
+# Column selection — keep ALL columns in the DataFrame (hidden ones are
+# still needed for filtering/search). The Leaderboard component will
+# remove `hidden=True` ones from the visible table via `hide_columns`.
+COLS = [c.name for c in fields(AutoEvalColumn)]
 
 EVAL_COLS = [c.name for c in fields(EvalQueueColumn)]
 EVAL_TYPES = [c.type for c in fields(EvalQueueColumn)]

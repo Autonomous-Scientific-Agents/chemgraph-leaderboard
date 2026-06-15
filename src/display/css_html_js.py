@@ -285,52 +285,30 @@ custom_css = """
 }
 
 /* ============================================================
-   5. FILTER CONTROLS
-   ============================================================ */
-#filter_type {
-    border: 0;
-    padding-left: 0;
-    padding-top: 0;
-}
+   5. CONTROLS PANELS  (left = Data + Model family, right = Tasks)
+   ============================================================
+   Gradio's side-by-side layout is kept. JS redistributes labels:
+     LEFT  (column-selector)    : Data + Model family
+     RIGHT (model-family filter): Tasks
+*/
 
-#filter_type label {
-    display: flex;
+/* Section header (Data / Model family / Tasks). */
+[data-cg-role="column-selector"] .cg-group-header,
+[data-cg-role="model-family-filter"] .cg-group-header {
+    font-weight: 600;
+    font-size: 0.78rem;
+    color: var(--cg-text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin: 0.55rem 0 0.25rem;
+    padding-bottom: 0.25rem;
+    border-bottom: 1px solid var(--cg-border-light);
+    flex-basis: 100%;
+    width: 100%;
 }
-
-#filter_type label > span {
-    margin-top: var(--spacing-lg);
-    margin-right: 0.5em;
-}
-
-#filter_type label > .wrap {
-    width: 103px;
-}
-
-#filter_type label > .wrap .wrap-inner {
-    padding: 2px;
-}
-
-#filter_type label > .wrap .wrap-inner input {
-    width: 1px;
-}
-
-#filter-columns-type {
-    border: 0;
-    padding: 0.5;
-}
-
-#filter-columns-size {
-    border: 0;
-    padding: 0.5;
-}
-
-#box-filter > .form {
-    border: 0;
-}
-
-/* Column selector — cleaner look */
-.column-selector .wrap {
-    border-radius: var(--cg-radius-sm) !important;
+[data-cg-role="column-selector"] > .cg-group-header-data,
+[data-cg-role="model-family-filter"] > .cg-group-header-tasks {
+    margin-top: 0;
 }
 
 /* ============================================================
@@ -654,3 +632,199 @@ get_window_url_params = """
         return url_params;
     }
     """
+
+
+# Inline <script> injected via gr.Blocks(head=...). Step 1 only:
+# inside the column-selector CheckboxGroup, sort labels into Data
+# (Average / T / Model / trend cols) and Tasks (the 12 categories)
+# and insert a header before each group. Does NOT touch the parent
+# layout, the model-family filter, ancestor styling, or anything
+# else. Each prior attempt to do those things produced regressions
+# (gray seam, half-width card, leak across tabs).
+group_columns_head = r"""
+<script>
+(function () {
+  const TASK_COLS = new Set([
+    "SMILES Lookup", "Opt (Name)", "Opt (SMILES)",
+    "Vib (Name)", "Vib (SMILES)",
+    "Thermo (Name)", "Thermo (SMILES)",
+    "Dipole (Name)", "Dipole (SMILES)",
+    "Energy (Name)", "Energy (SMILES)",
+    "Reaction Energy",
+  ]);
+
+  const labelOf = el => (el.innerText || el.textContent || "").trim();
+
+  // Find the column-selector CheckboxGroup. Seed on an "Average"
+  // label and walk up until the wrapper contains task labels but
+  // not unrelated UI labels (Search, org chips).
+  function findColumnSelectorContainers() {
+    const seeds = Array.from(document.querySelectorAll("label"))
+      .filter(l => labelOf(l).startsWith("Average"));
+    const out = new Set();
+    for (const seed of seeds) {
+      let cur = seed.parentElement;
+      for (let i = 0; i < 4 && cur; i++) {
+        const texts = Array.from(cur.children)
+          .filter(c => c.tagName === "LABEL").map(labelOf);
+        const hasTask = texts.some(t => TASK_COLS.has(t));
+        const polluted = texts.includes("Search")
+          || texts.includes("anthropic") || texts.includes("openai");
+        if (hasTask && !polluted) { out.add(cur); break; }
+        cur = cur.parentElement;
+      }
+    }
+    return Array.from(out);
+  }
+
+  // Find the model-family filter: a small CheckboxGroup whose direct
+  // <label> children are org names.
+  function findModelFamilyContainers() {
+    const seeds = Array.from(document.querySelectorAll("label"))
+      .filter(l => { const t = labelOf(l); return t === "anthropic" || t === "openai"; });
+    const out = new Set();
+    for (const seed of seeds) {
+      const parent = seed.parentElement;
+      if (!parent) continue;
+      const texts = Array.from(parent.children)
+        .filter(c => c.tagName === "LABEL").map(labelOf);
+      if (texts.length === 0 || texts.length > 12) continue;
+      if (texts.some(t => TASK_COLS.has(t))) continue;
+      out.add(parent);
+    }
+    return Array.from(out);
+  }
+
+  // Hide a Gradio-rendered section label ("Columns to display" /
+  // "Model family") sitting just above the given content container.
+  function hideSiblingSectionLabel(container, needle) {
+    let cur = container.parentElement;
+    for (let i = 0; i < 5 && cur; i++) {
+      const candidates = cur.querySelectorAll(
+        ":scope > label, :scope > span, :scope > .label");
+      for (const el of candidates) {
+        if (labelOf(el).toLowerCase().includes(needle) && !el.dataset.cgHidden) {
+          el.style.display = "none";
+          el.dataset.cgHidden = "1";
+          return;
+        }
+      }
+      cur = cur.parentElement;
+    }
+  }
+
+  // Pair each column-selector with the model-family filter whose
+  // nearest common ancestor is shortest — they live in the same tab.
+  function pairColAndMF(cols, fils) {
+    const pairs = [];
+    cols.forEach(c => {
+      let best = null, bestDepth = Infinity;
+      fils.forEach(f => {
+        let cur = c.parentElement, d = 0;
+        while (cur && d < 12) {
+          if (cur.contains(f)) {
+            if (d < bestDepth) { best = f; bestDepth = d; }
+            break;
+          }
+          cur = cur.parentElement; d++;
+        }
+      });
+      pairs.push([c, best]);
+    });
+    return pairs;
+  }
+
+  // Lay out a panel: optionally hide its Gradio section label, then
+  // sort its direct-child labels into Data + Model-family groups
+  // (left) or Tasks-only (right) with sticky group headers.
+  function reshape(colSel, mfFilter) {
+    colSel.dataset.cgRole = "column-selector";
+    if (mfFilter) mfFilter.dataset.cgRole = "model-family-filter";
+
+    hideSiblingSectionLabel(colSel, "columns to display");
+    if (mfFilter) hideSiblingSectionLabel(mfFilter, "model family");
+
+    if (colSel.dataset.cgGrouped === "1") return;
+
+    // 1. Snapshot the column-selector's current labels and split.
+    const colLabels = Array.from(colSel.children).filter(c => c.tagName === "LABEL");
+    const dataLabels = colLabels.filter(l => !TASK_COLS.has(labelOf(l)));
+    const taskLabels = colLabels.filter(l => TASK_COLS.has(labelOf(l)));
+
+    // 2. Remove any prior headers we inserted in either panel.
+    colSel.querySelectorAll(":scope > .cg-group-header").forEach(h => h.remove());
+    if (mfFilter) {
+      mfFilter.querySelectorAll(":scope > .cg-group-header").forEach(h => h.remove());
+    }
+
+    // 3. LEFT panel (column-selector): Data section, then Model family
+    //    section. We move the MF chips here AFTER Data; the model-
+    //    family panel on the right becomes the home for Tasks.
+    if (dataLabels.length) {
+      const h = document.createElement("div");
+      h.className = "cg-group-header cg-group-header-data";
+      h.textContent = "Data";
+      colSel.appendChild(h);
+      dataLabels.forEach(l => colSel.appendChild(l));
+    }
+
+    if (mfFilter) {
+      const mfLabels = Array.from(mfFilter.children).filter(c => c.tagName === "LABEL");
+      if (mfLabels.length) {
+        const h = document.createElement("div");
+        h.className = "cg-group-header cg-group-header-family";
+        h.textContent = "Model family";
+        colSel.appendChild(h);
+        mfLabels.forEach(l => colSel.appendChild(l));
+      }
+
+      // 4. RIGHT panel (was model-family): now hosts Tasks.
+      if (taskLabels.length) {
+        const h = document.createElement("div");
+        h.className = "cg-group-header cg-group-header-tasks";
+        h.textContent = "Tasks";
+        mfFilter.appendChild(h);
+        taskLabels.forEach(l => mfFilter.appendChild(l));
+      }
+    } else if (taskLabels.length) {
+      // No right panel found — keep Tasks in the left panel under a
+      // header so they aren't lost.
+      const h = document.createElement("div");
+      h.className = "cg-group-header cg-group-header-tasks";
+      h.textContent = "Tasks";
+      colSel.appendChild(h);
+      taskLabels.forEach(l => colSel.appendChild(l));
+    }
+
+    colSel.dataset.cgGrouped = "1";
+  }
+
+  function pass() {
+    const cols = findColumnSelectorContainers();
+    const fils = findModelFamilyContainers();
+    pairColAndMF(cols, fils).forEach(([c, f]) => reshape(c, f));
+  }
+
+  let pending = false;
+  function schedule() {
+    if (pending) return;
+    pending = true;
+    setTimeout(() => {
+      pending = false;
+      try { pass(); } catch (e) { console.warn("[cg-group]", e); }
+    }, 100);
+  }
+
+  function start() {
+    pass();
+    new MutationObserver(schedule).observe(document.body, { childList: true, subtree: true });
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", start);
+  } else {
+    start();
+  }
+})();
+</script>
+"""
