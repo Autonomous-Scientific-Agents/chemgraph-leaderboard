@@ -146,38 +146,106 @@ def _top_n_models(history_df: pd.DataFrame, n: int = 3) -> list[str]:
     return latest.sort_values("average", ascending=False)["model"].head(n).tolist()
 
 
-# Date-range presets shown to the user (radio labels) and the number of
-# trailing days each one keeps. "All time" means no filter.
+# Date-range presets (radio shortcuts). "Past week" / "Past month"
+# select a trailing-days window. From/To inputs (always visible) are
+# the authoritative range; presets just snap the inputs to a window.
 DATE_RANGE_PRESETS = {
     "Past week": 7,
     "Past month": 30,
-    "All time": None,
 }
 
 
-def _apply_date_range(df: pd.DataFrame, preset: str) -> pd.DataFrame:
-    """Filter a history DataFrame to the last N days based on the preset.
+def _parse_iso_date(text: str):
+    if not text:
+        return None
+    try:
+        return pd.to_datetime(text.strip()).normalize()
+    except (ValueError, TypeError):
+        return None
 
-    Anchored on the dataset's max eval_date, not wall-clock today, so the
-    window stays useful even if the most recent eval was a few days ago.
+
+def _data_date_bounds(df: pd.DataFrame):
+    """Return (min, max) eval_date as ISO strings, or ("", "") if empty."""
+    if df is None or df.empty or "eval_date" not in df.columns:
+        return "", ""
+    dates = pd.to_datetime(df["eval_date"]).dropna()
+    if dates.empty:
+        return "", ""
+    return dates.min().strftime("%Y-%m-%d"), dates.max().strftime("%Y-%m-%d")
+
+
+def _window_stats(
+    history_df: pd.DataFrame,
+    workflow_filter: str,
+    models: list[str] | None,
+    date_from: str,
+    date_to: str,
+) -> pd.DataFrame:
+    """One row per (Model, Workflow) summarizing the visible window.
+
+    Columns: Model, Workflow, N, Average, Min, Max, Std.
     """
+    cols = ["Model", "Workflow", "#Days", "Average", "Min", "Max", "Std"]
+    if history_df is None or history_df.empty:
+        return pd.DataFrame(columns=cols)
+
+    df = history_df.copy()
+    if workflow_filter != "All" and "workflow" in df.columns:
+        df = df[df["workflow"] == workflow_filter]
+    if models:
+        df = df[df["model"].isin(models)]
+    df = _apply_date_range(df, date_from, date_to)
+    if df.empty:
+        return pd.DataFrame(columns=cols)
+
+    group_cols = ["model"] + (["workflow"] if "workflow" in df.columns else [])
+    grouped = df.groupby(group_cols, dropna=False)["average"].agg(
+        ["count", "mean", "min", "max", "std"]
+    ).reset_index()
+    grouped["std"] = grouped["std"].fillna(0.0)
+    grouped = grouped.rename(columns={
+        "model": "Model",
+        "workflow": "Workflow",
+        "count": "#Days",
+        "mean": "Average",
+        "min": "Min",
+        "max": "Max",
+        "std": "Std",
+    })
+    if "Workflow" not in grouped.columns:
+        grouped["Workflow"] = ""
+    for c in ("Average", "Min", "Max", "Std"):
+        grouped[c] = grouped[c].round(2)
+    return grouped.sort_values(["Average"], ascending=False)[cols].reset_index(drop=True)
+
+
+def _apply_date_range(
+    df: pd.DataFrame,
+    date_from: str | None = None,
+    date_to: str | None = None,
+) -> pd.DataFrame:
+    """Filter by inclusive [from, to]. Empty/invalid bounds are ignored."""
     if df is None or df.empty or "eval_date" not in df.columns:
         return df
-    days = DATE_RANGE_PRESETS.get(preset)
-    if days is None:
+    start = _parse_iso_date(date_from)
+    end = _parse_iso_date(date_to)
+    if start is None and end is None:
         return df
-    max_date = pd.to_datetime(df["eval_date"]).max()
-    if pd.isna(max_date):
-        return df
-    cutoff = max_date - pd.Timedelta(days=days - 1)
-    return df[pd.to_datetime(df["eval_date"]) >= cutoff]
+    eval_dt = pd.to_datetime(df["eval_date"])
+    mask = pd.Series(True, index=df.index)
+    if start is not None:
+        mask &= eval_dt >= start
+    if end is not None:
+        mask &= eval_dt <= end
+    return df[mask]
 
 
 def build_trend_chart(
     history_df: pd.DataFrame,
     workflow_filter: str = "All",
     models: list[str] | None = None,
-    date_range: str = "All time",
+    date_from: str = "",
+    date_to: str = "",
 ):
     """Build a Plotly line chart showing model scores over time.
 
@@ -216,10 +284,10 @@ def build_trend_chart(
     df = df[df["model"].isin(models)]
 
     # Apply date-range filter
-    df = _apply_date_range(df, date_range)
+    df = _apply_date_range(df, date_from, date_to)
 
     if df.empty:
-        fig = px.line(title=f"No data in range '{date_range}' for workflow: {workflow_filter}")
+        fig = px.line(title=f"No data in {date_from or '…'} → {date_to or '…'} for workflow: {workflow_filter}")
         fig.update_layout(xaxis_title="Date", yaxis_title="Average Score (%)")
         return fig
 
@@ -281,25 +349,13 @@ def build_trend_chart(
 def filter_trend_data(
     workflow_filter: str = "All",
     models: list[str] | None = None,
-    date_range: str = "All time",
+    date_from: str = "",
+    date_to: str = "",
 ):
-    """Filter the already-loaded trend data in memory (no re-download).
-
-    Used by the workflow dropdown, model multiselect, and date-range
-    radio so any control change is instant.
-    """
-    global TREND_HISTORY_DF, TREND_SUMMARY_DF
-
-    summary_df = TREND_SUMMARY_DF.copy() if not TREND_SUMMARY_DF.empty else pd.DataFrame()
+    """Filter the already-loaded trend data in memory (no re-download)."""
     history_df = TREND_HISTORY_DF
-
-    if workflow_filter != "All" and not summary_df.empty and "Workflow" in summary_df.columns:
-        summary_df = summary_df[summary_df["Workflow"] == workflow_filter]
-
-    if models and not summary_df.empty and "Model" in summary_df.columns:
-        summary_df = summary_df[summary_df["Model"].isin(models)]
-
-    chart = build_trend_chart(history_df, workflow_filter, models, date_range)
+    summary_df = _window_stats(history_df, workflow_filter, models, date_from, date_to)
+    chart = build_trend_chart(history_df, workflow_filter, models, date_from, date_to)
     timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
     return chart, summary_df, timestamp
 
@@ -307,7 +363,8 @@ def filter_trend_data(
 def refresh_trend_data(
     workflow_filter: str = "All",
     models: list[str] | None = None,
-    date_range: str = "All time",
+    date_from: str = "",
+    date_to: str = "",
 ):
     """Re-download eval results from HF Hub and recompute trend data.
 
@@ -332,7 +389,7 @@ def refresh_trend_data(
         TREND_HISTORY_DF = pd.DataFrame()
 
     # Delegate to the lightweight filter function for the current view.
-    return filter_trend_data(workflow_filter, models, date_range)
+    return filter_trend_data(workflow_filter, models, date_from, date_to)
 
 
 def init_leaderboard(dataframe):
@@ -387,7 +444,7 @@ with demo:
                 else TREND_HISTORY_DF
             )
             _initial_models = _top_n_models(_initial_history, n=3)
-            _default_date_range = "All time"
+            _data_min, _data_max = _data_date_bounds(TREND_HISTORY_DF)
             with gr.Row(elem_id="cg-trend-controls", equal_height=True):
                 with gr.Column(scale=10, min_width=360, elem_classes="cg-zone cg-zone-data"):
                     workflow_filter = gr.Dropdown(
@@ -403,12 +460,34 @@ with demo:
                         multiselect=True,
                         interactive=True,
                     )
-                with gr.Column(scale=4, min_width=200, elem_classes="cg-zone cg-zone-view"):
-                    date_range_filter = gr.Radio(
-                        choices=list(DATE_RANGE_PRESETS.keys()),
-                        value=_default_date_range,
-                        label="Date range",
-                        interactive=True,
+                with gr.Column(scale=5, min_width=260, elem_classes="cg-zone cg-zone-view"):
+                    with gr.Row(elem_id="cg-trend-date-range"):
+                        date_from = gr.Textbox(
+                            value=_data_min,
+                            label="From",
+                            placeholder="YYYY-MM-DD",
+                            interactive=True,
+                            lines=1,
+                            max_lines=1,
+                            elem_id="cg-trend-from",
+                            elem_classes="cg-date-input",
+                        )
+                        date_to = gr.Textbox(
+                            value=_data_max,
+                            label="To",
+                            placeholder="YYYY-MM-DD",
+                            interactive=True,
+                            lines=1,
+                            max_lines=1,
+                            elem_id="cg-trend-to",
+                            elem_classes="cg-date-input",
+                        )
+                    # Hidden inputs that carry the dataset min/max to JS
+                    # so it can constrain the native date pickers.
+                    gr.HTML(
+                        f'<span id="cg-trend-date-bounds" '
+                        f'data-min="{_data_min}" data-max="{_data_max}" '
+                        f'style="display:none"></span>'
                     )
                 with gr.Column(scale=3, min_width=180, elem_classes="cg-zone cg-zone-actions"):
                     last_updated_box = gr.Textbox(
@@ -424,16 +503,22 @@ with demo:
                     TREND_HISTORY_DF,
                     workflow_filter=_default_workflow,
                     models=_initial_models,
-                    date_range=_default_date_range,
+                    date_from=_data_min,
+                    date_to=_data_max,
                 ),
                 elem_id="cg-trend-chart",
             )
-            gr.Markdown("### Summary: 1-Day / 3-Day / 7-Day Averages", elem_id="cg-trend-summary-label")
-            _initial_summary = TREND_SUMMARY_DF
-            if not _initial_summary.empty and "Workflow" in _initial_summary.columns:
-                _initial_summary = _initial_summary[_initial_summary["Workflow"] == _default_workflow]
-            if not _initial_summary.empty and "Model" in _initial_summary.columns and _initial_models:
-                _initial_summary = _initial_summary[_initial_summary["Model"].isin(_initial_models)]
+            gr.Markdown(
+                "### Window stats (Average / Min / Max / Std over the selected range)",
+                elem_id="cg-trend-summary-label",
+            )
+            _initial_summary = _window_stats(
+                TREND_HISTORY_DF,
+                _default_workflow,
+                _initial_models,
+                _data_min,
+                _data_max,
+            )
             trend_table = gr.Dataframe(
                 value=_initial_summary,
                 interactive=False,
@@ -441,17 +526,18 @@ with demo:
             )
 
             # Any control change just re-filters in memory (no re-download)
-            for ctl in (workflow_filter, model_filter, date_range_filter):
+            _trend_inputs = [workflow_filter, model_filter, date_from, date_to]
+            for ctl in (workflow_filter, model_filter, date_from, date_to):
                 ctl.change(
                     fn=filter_trend_data,
-                    inputs=[workflow_filter, model_filter, date_range_filter],
+                    inputs=_trend_inputs,
                     outputs=[trend_chart, trend_table, last_updated_box],
                 )
 
             # Manual refresh on button click
             refresh_btn.click(
                 fn=refresh_trend_data,
-                inputs=[workflow_filter, model_filter, date_range_filter],
+                inputs=_trend_inputs,
                 outputs=[trend_chart, trend_table, last_updated_box],
             )
 

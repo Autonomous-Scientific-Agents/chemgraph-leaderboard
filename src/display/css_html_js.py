@@ -389,6 +389,15 @@ custom_css = """
     gap: 0.35rem !important;
 }
 
+/* From/To date pickers — compact native-date inputs side by side. */
+#cg-trend-date-range {
+    gap: 0.5rem !important;
+}
+#cg-trend-date-range .cg-date-input input {
+    font-size: 0.82rem !important;
+    padding: 0.25rem 0.4rem !important;
+}
+
 /* Models multiselect — single-row pill that keeps the frame a few
    pixels taller than the chips inside so they don't touch the top
    or bottom border. Scoped to dropdowns that have .token children
@@ -899,10 +908,43 @@ group_columns_head = r"""
     colSel.dataset.cgGrouped = "1";
   }
 
+  // Turn the From/To textboxes into native date pickers, constrained
+  // to the dataset's [min, max] eval_date range (carried in a hidden
+  // span). Gradio doesn't ship a DatePicker; mutating the input's
+  // type is enough because the value still flows through the textbox
+  // 'input' event, so Python-side change handlers fire normally.
+  function upgradeDateInputs() {
+    const bounds = document.getElementById("cg-trend-date-bounds");
+    const minDate = bounds ? bounds.dataset.min : "";
+    const maxDate = bounds ? bounds.dataset.max : "";
+    ["cg-trend-from", "cg-trend-to"].forEach(id => {
+      const wrap = document.getElementById(id);
+      if (!wrap || wrap.dataset.cgDated === "1") return;
+      const input = wrap.querySelector("input, textarea");
+      if (!input) return;
+      // Replace <textarea> with an <input> if Gradio rendered one.
+      let target = input;
+      if (input.tagName === "TEXTAREA") {
+        target = document.createElement("input");
+        target.value = input.value;
+        for (const a of input.attributes) {
+          if (a.name === "rows") continue;
+          target.setAttribute(a.name, a.value);
+        }
+        input.replaceWith(target);
+      }
+      target.type = "date";
+      if (minDate) target.min = minDate;
+      if (maxDate) target.max = maxDate;
+      wrap.dataset.cgDated = "1";
+    });
+  }
+
   function pass() {
     const cols = findColumnSelectorContainers();
     const fils = findModelFamilyContainers();
     pairColAndMF(cols, fils).forEach(([c, f]) => reshape(c, f));
+    upgradeDateInputs();
   }
 
   let pending = false;
