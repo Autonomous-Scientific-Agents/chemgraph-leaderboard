@@ -128,7 +128,29 @@ except Exception as e:
     pending_eval_queue_df = _empty_queue.copy()
 
 
-def build_trend_chart(history_df: pd.DataFrame, workflow_filter: str = "All"):
+def _all_models(history_df: pd.DataFrame) -> list[str]:
+    """Sorted list of every model that has at least one history row."""
+    if history_df is None or history_df.empty or "model" not in history_df.columns:
+        return []
+    return sorted(history_df["model"].dropna().unique().tolist())
+
+
+def _top_n_models(history_df: pd.DataFrame, n: int = 3) -> list[str]:
+    """Top-N models by their most-recent average score (one row per model)."""
+    if history_df is None or history_df.empty:
+        return []
+    df = history_df.dropna(subset=["model", "eval_date", "average"])
+    if df.empty:
+        return []
+    latest = df.sort_values("eval_date").groupby("model").tail(1)
+    return latest.sort_values("average", ascending=False)["model"].head(n).tolist()
+
+
+def build_trend_chart(
+    history_df: pd.DataFrame,
+    workflow_filter: str = "All",
+    models: list[str] | None = None,
+):
     """Build a Plotly line chart showing model scores over time.
 
     Parameters
@@ -137,6 +159,9 @@ def build_trend_chart(history_df: pd.DataFrame, workflow_filter: str = "All"):
         Combined history with an optional ``workflow`` column.
     workflow_filter : str
         One of "All", "single_agent", or "multi_agent".
+    models : list[str], optional
+        Restrict the chart to these models. None or empty list means
+        "show nothing" (so the user can clear all models intentionally).
     """
     if history_df.empty:
         fig = px.line(title="No historical data available yet")
@@ -151,6 +176,13 @@ def build_trend_chart(history_df: pd.DataFrame, workflow_filter: str = "All"):
     # Apply workflow filter
     if workflow_filter != "All" and "workflow" in df.columns:
         df = df[df["workflow"] == workflow_filter]
+
+    # Apply model filter
+    if not models:
+        fig = px.line(title="Select one or more models to show their trend")
+        fig.update_layout(xaxis_title="Date", yaxis_title="Average Score (%)")
+        return fig
+    df = df[df["model"].isin(models)]
 
     if df.empty:
         fig = px.line(title=f"No data available for workflow: {workflow_filter}")
@@ -191,20 +223,31 @@ def build_trend_chart(history_df: pd.DataFrame, workflow_filter: str = "All"):
             },
         )
 
+    # Y-axis: auto-scale with a small padding around the visible
+    # min/max so points don't sit flush against the chart edges.
+    visible = df["average"].dropna()
+    if not visible.empty:
+        y_min, y_max = float(visible.min()), float(visible.max())
+        span = y_max - y_min
+        pad = max(span * 0.1, 2.0)  # at least 2 percentage points of headroom
+        y_range = [max(0.0, y_min - pad), min(100.0, y_max + pad)]
+    else:
+        y_range = None
+
     fig.update_layout(
         xaxis_title="Date",
         yaxis_title="Average Score (%)",
         legend_title="Model",
         hovermode="x unified",
-        yaxis=dict(range=[0, 105]),
+        yaxis=dict(range=y_range) if y_range else dict(),
     )
     return fig
 
 
-def filter_trend_data(workflow_filter: str = "All"):
+def filter_trend_data(workflow_filter: str = "All", models: list[str] | None = None):
     """Filter the already-loaded trend data in memory (no re-download).
 
-    Used by the workflow dropdown so that switching filters is instant.
+    Used by the workflow dropdown + model multiselect so changes are instant.
     """
     global TREND_HISTORY_DF, TREND_SUMMARY_DF
 
@@ -214,12 +257,15 @@ def filter_trend_data(workflow_filter: str = "All"):
     if workflow_filter != "All" and not summary_df.empty and "Workflow" in summary_df.columns:
         summary_df = summary_df[summary_df["Workflow"] == workflow_filter]
 
-    chart = build_trend_chart(history_df, workflow_filter)
+    if models and not summary_df.empty and "Model" in summary_df.columns:
+        summary_df = summary_df[summary_df["Model"].isin(models)]
+
+    chart = build_trend_chart(history_df, workflow_filter, models)
     timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
     return chart, summary_df, timestamp
 
 
-def refresh_trend_data(workflow_filter: str = "All"):
+def refresh_trend_data(workflow_filter: str = "All", models: list[str] | None = None):
     """Re-download eval results from HF Hub and recompute trend data.
 
     Returns updated values for the trend chart, summary table, and a
@@ -243,7 +289,7 @@ def refresh_trend_data(workflow_filter: str = "All"):
         TREND_HISTORY_DF = pd.DataFrame()
 
     # Delegate to the lightweight filter function for the current view.
-    return filter_trend_data(workflow_filter)
+    return filter_trend_data(workflow_filter, models)
 
 
 def init_leaderboard(dataframe):
@@ -290,14 +336,31 @@ with demo:
                 elem_classes="markdown-text",
                 elem_id="cg-trends-header",
             )
+            # Default to single_agent + its top-3 models by latest score.
+            _default_workflow = "single_agent"
+            _initial_history = (
+                TREND_HISTORY_DF[TREND_HISTORY_DF["workflow"] == _default_workflow]
+                if (not TREND_HISTORY_DF.empty and "workflow" in TREND_HISTORY_DF.columns)
+                else TREND_HISTORY_DF
+            )
+            _initial_models = _top_n_models(_initial_history, n=3)
             with gr.Row(elem_id="cg-trend-controls"):
                 workflow_filter = gr.Dropdown(
                     choices=["All", "single_agent", "multi_agent"],
-                    value="All",
+                    value="single_agent",
                     label="Workflow",
                     interactive=True,
                     scale=0,
                     min_width=180,
+                )
+                model_filter = gr.Dropdown(
+                    choices=_all_models(TREND_HISTORY_DF),
+                    value=_initial_models,
+                    label="Models",
+                    multiselect=True,
+                    interactive=True,
+                    scale=2,
+                    min_width=280,
                 )
                 refresh_btn = gr.Button("🔄 Refresh", scale=0, min_width=120, elem_id="cg-refresh-btn")
                 last_updated_box = gr.Textbox(
@@ -306,25 +369,36 @@ with demo:
                     interactive=False,
                     scale=1,
                 )
-            trend_chart = gr.Plot(value=build_trend_chart(TREND_HISTORY_DF), elem_id="cg-trend-chart")
+            trend_chart = gr.Plot(
+                value=build_trend_chart(
+                    TREND_HISTORY_DF, workflow_filter=_default_workflow, models=_initial_models
+                ),
+                elem_id="cg-trend-chart",
+            )
             gr.Markdown("### Summary: 1-Day / 3-Day / 7-Day Averages", elem_id="cg-trend-summary-label")
+            _initial_summary = TREND_SUMMARY_DF
+            if not _initial_summary.empty and "Workflow" in _initial_summary.columns:
+                _initial_summary = _initial_summary[_initial_summary["Workflow"] == _default_workflow]
+            if not _initial_summary.empty and "Model" in _initial_summary.columns and _initial_models:
+                _initial_summary = _initial_summary[_initial_summary["Model"].isin(_initial_models)]
             trend_table = gr.Dataframe(
-                value=TREND_SUMMARY_DF,
+                value=_initial_summary,
                 interactive=False,
                 elem_id="cg-trend-summary",
             )
 
-            # Workflow filter change — just re-filter in memory (no re-download)
-            workflow_filter.change(
-                fn=filter_trend_data,
-                inputs=[workflow_filter],
-                outputs=[trend_chart, trend_table, last_updated_box],
-            )
+            # Any control change just re-filters in memory (no re-download)
+            for ctl in (workflow_filter, model_filter):
+                ctl.change(
+                    fn=filter_trend_data,
+                    inputs=[workflow_filter, model_filter],
+                    outputs=[trend_chart, trend_table, last_updated_box],
+                )
 
             # Manual refresh on button click
             refresh_btn.click(
                 fn=refresh_trend_data,
-                inputs=[workflow_filter],
+                inputs=[workflow_filter, model_filter],
                 outputs=[trend_chart, trend_table, last_updated_box],
             )
 
