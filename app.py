@@ -146,10 +146,38 @@ def _top_n_models(history_df: pd.DataFrame, n: int = 3) -> list[str]:
     return latest.sort_values("average", ascending=False)["model"].head(n).tolist()
 
 
+# Date-range presets shown to the user (radio labels) and the number of
+# trailing days each one keeps. "All time" means no filter.
+DATE_RANGE_PRESETS = {
+    "Past week": 7,
+    "Past month": 30,
+    "All time": None,
+}
+
+
+def _apply_date_range(df: pd.DataFrame, preset: str) -> pd.DataFrame:
+    """Filter a history DataFrame to the last N days based on the preset.
+
+    Anchored on the dataset's max eval_date, not wall-clock today, so the
+    window stays useful even if the most recent eval was a few days ago.
+    """
+    if df is None or df.empty or "eval_date" not in df.columns:
+        return df
+    days = DATE_RANGE_PRESETS.get(preset)
+    if days is None:
+        return df
+    max_date = pd.to_datetime(df["eval_date"]).max()
+    if pd.isna(max_date):
+        return df
+    cutoff = max_date - pd.Timedelta(days=days - 1)
+    return df[pd.to_datetime(df["eval_date"]) >= cutoff]
+
+
 def build_trend_chart(
     history_df: pd.DataFrame,
     workflow_filter: str = "All",
     models: list[str] | None = None,
+    date_range: str = "All time",
 ):
     """Build a Plotly line chart showing model scores over time.
 
@@ -162,6 +190,9 @@ def build_trend_chart(
     models : list[str], optional
         Restrict the chart to these models. None or empty list means
         "show nothing" (so the user can clear all models intentionally).
+    date_range : str
+        One of the keys in DATE_RANGE_PRESETS. Filters rows to the last
+        N days of available data.
     """
     if history_df.empty:
         fig = px.line(title="No historical data available yet")
@@ -184,8 +215,11 @@ def build_trend_chart(
         return fig
     df = df[df["model"].isin(models)]
 
+    # Apply date-range filter
+    df = _apply_date_range(df, date_range)
+
     if df.empty:
-        fig = px.line(title=f"No data available for workflow: {workflow_filter}")
+        fig = px.line(title=f"No data in range '{date_range}' for workflow: {workflow_filter}")
         fig.update_layout(xaxis_title="Date", yaxis_title="Average Score (%)")
         return fig
 
@@ -244,10 +278,15 @@ def build_trend_chart(
     return fig
 
 
-def filter_trend_data(workflow_filter: str = "All", models: list[str] | None = None):
+def filter_trend_data(
+    workflow_filter: str = "All",
+    models: list[str] | None = None,
+    date_range: str = "All time",
+):
     """Filter the already-loaded trend data in memory (no re-download).
 
-    Used by the workflow dropdown + model multiselect so changes are instant.
+    Used by the workflow dropdown, model multiselect, and date-range
+    radio so any control change is instant.
     """
     global TREND_HISTORY_DF, TREND_SUMMARY_DF
 
@@ -260,12 +299,16 @@ def filter_trend_data(workflow_filter: str = "All", models: list[str] | None = N
     if models and not summary_df.empty and "Model" in summary_df.columns:
         summary_df = summary_df[summary_df["Model"].isin(models)]
 
-    chart = build_trend_chart(history_df, workflow_filter, models)
+    chart = build_trend_chart(history_df, workflow_filter, models, date_range)
     timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
     return chart, summary_df, timestamp
 
 
-def refresh_trend_data(workflow_filter: str = "All", models: list[str] | None = None):
+def refresh_trend_data(
+    workflow_filter: str = "All",
+    models: list[str] | None = None,
+    date_range: str = "All time",
+):
     """Re-download eval results from HF Hub and recompute trend data.
 
     Returns updated values for the trend chart, summary table, and a
@@ -289,7 +332,7 @@ def refresh_trend_data(workflow_filter: str = "All", models: list[str] | None = 
         TREND_HISTORY_DF = pd.DataFrame()
 
     # Delegate to the lightweight filter function for the current view.
-    return filter_trend_data(workflow_filter, models)
+    return filter_trend_data(workflow_filter, models, date_range)
 
 
 def init_leaderboard(dataframe):
@@ -344,34 +387,44 @@ with demo:
                 else TREND_HISTORY_DF
             )
             _initial_models = _top_n_models(_initial_history, n=3)
-            with gr.Row(elem_id="cg-trend-controls"):
-                workflow_filter = gr.Dropdown(
-                    choices=["All", "single_agent", "multi_agent"],
-                    value="single_agent",
-                    label="Workflow",
-                    interactive=True,
-                    scale=0,
-                    min_width=180,
-                )
-                model_filter = gr.Dropdown(
-                    choices=_all_models(TREND_HISTORY_DF),
-                    value=_initial_models,
-                    label="Models",
-                    multiselect=True,
-                    interactive=True,
-                    scale=2,
-                    min_width=280,
-                )
-                refresh_btn = gr.Button("🔄 Refresh", scale=0, min_width=120, elem_id="cg-refresh-btn")
-                last_updated_box = gr.Textbox(
-                    label="Last updated",
-                    value=datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC"),
-                    interactive=False,
-                    scale=1,
-                )
+            _default_date_range = "All time"
+            with gr.Row(elem_id="cg-trend-controls", equal_height=True):
+                with gr.Column(scale=10, min_width=360, elem_classes="cg-zone cg-zone-data"):
+                    workflow_filter = gr.Dropdown(
+                        choices=["All", "single_agent", "multi_agent"],
+                        value="single_agent",
+                        label="Workflow",
+                        interactive=True,
+                    )
+                    model_filter = gr.Dropdown(
+                        choices=_all_models(TREND_HISTORY_DF),
+                        value=_initial_models,
+                        label="Models",
+                        multiselect=True,
+                        interactive=True,
+                    )
+                with gr.Column(scale=4, min_width=200, elem_classes="cg-zone cg-zone-view"):
+                    date_range_filter = gr.Radio(
+                        choices=list(DATE_RANGE_PRESETS.keys()),
+                        value=_default_date_range,
+                        label="Date range",
+                        interactive=True,
+                    )
+                with gr.Column(scale=3, min_width=180, elem_classes="cg-zone cg-zone-actions"):
+                    last_updated_box = gr.Textbox(
+                        label="Last updated",
+                        value=datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC"),
+                        interactive=False,
+                    )
+                    refresh_btn = gr.Button(
+                        "🔄 Refresh", size="sm", elem_id="cg-refresh-btn"
+                    )
             trend_chart = gr.Plot(
                 value=build_trend_chart(
-                    TREND_HISTORY_DF, workflow_filter=_default_workflow, models=_initial_models
+                    TREND_HISTORY_DF,
+                    workflow_filter=_default_workflow,
+                    models=_initial_models,
+                    date_range=_default_date_range,
                 ),
                 elem_id="cg-trend-chart",
             )
@@ -388,17 +441,17 @@ with demo:
             )
 
             # Any control change just re-filters in memory (no re-download)
-            for ctl in (workflow_filter, model_filter):
+            for ctl in (workflow_filter, model_filter, date_range_filter):
                 ctl.change(
                     fn=filter_trend_data,
-                    inputs=[workflow_filter, model_filter],
+                    inputs=[workflow_filter, model_filter, date_range_filter],
                     outputs=[trend_chart, trend_table, last_updated_box],
                 )
 
             # Manual refresh on button click
             refresh_btn.click(
                 fn=refresh_trend_data,
-                inputs=[workflow_filter, model_filter],
+                inputs=[workflow_filter, model_filter, date_range_filter],
                 outputs=[trend_chart, trend_table, last_updated_box],
             )
 

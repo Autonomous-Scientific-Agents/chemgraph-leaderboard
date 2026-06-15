@@ -329,12 +329,103 @@ custom_css = """
     margin-bottom: 0.3rem !important;
 }
 
+/* Trends controls — one bordered card with three zones (Data / View /
+   Actions) separated by thin vertical dividers. */
 #cg-trend-controls {
     background: var(--cg-surface) !important;
     border: 1px solid var(--cg-border) !important;
     border-radius: var(--cg-radius-sm) !important;
-    padding: 0.6rem 1rem !important;
+    padding: 0.9rem 1rem !important;
     box-shadow: var(--cg-shadow-sm) !important;
+    gap: 0 !important;
+    align-items: stretch !important;
+}
+
+#cg-trend-controls .cg-zone {
+    padding: 0 1rem !important;
+    border-left: 1px solid var(--cg-border-light);
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 0.55rem !important;
+    min-width: 0 !important;
+}
+#cg-trend-controls .cg-zone:first-child {
+    border-left: 0;
+    padding-left: 0 !important;
+}
+#cg-trend-controls .cg-zone:last-child {
+    padding-right: 0 !important;
+}
+
+/* Zone-internal blocks blend into the card. */
+#cg-trend-controls .cg-zone .block,
+#cg-trend-controls .cg-zone .form {
+    background: transparent !important;
+    border: 0 !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+}
+
+/* Compact field labels inside zones. */
+#cg-trend-controls .cg-zone label > span:first-child {
+    font-size: 0.78rem !important;
+    color: var(--cg-text-secondary) !important;
+    font-weight: 500 !important;
+}
+
+/* The radio (Date range) — chip-row instead of stacked. */
+#cg-trend-controls .cg-zone-view .wrap {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    gap: 0.35rem !important;
+}
+
+/* Models multiselect — single-row pill that keeps the frame a few
+   pixels taller than the chips inside so they don't touch the top
+   or bottom border. Scoped to dropdowns that have .token children
+   (the multiselect) so the single-value Workflow dropdown keeps its
+   default compact height. */
+#cg-trend-controls .cg-zone-data .gradio-dropdown[data-testid="dropdown"] .wrap:has(.token) {
+    min-height: 51px !important;
+    padding: 0 0.4rem !important;
+    overflow: hidden !important;
+}
+#cg-trend-controls .cg-zone-data .wrap:has(.token):hover,
+#cg-trend-controls .cg-zone-data .wrap:has(.token):focus-within {
+    overflow-x: auto !important;
+}
+#cg-trend-controls .cg-zone-data .wrap:has(.token) .wrap-inner {
+    flex-wrap: nowrap !important;
+    overflow: visible !important;
+    padding: 8px 6px !important;
+    align-items: center !important;
+}
+#cg-trend-controls .cg-zone-data .wrap:has(.token) .wrap-inner .token {
+    flex-shrink: 0 !important;
+}
+
+/* Refresh button — compact outline pill using the theme primary. */
+#cg-trend-controls .cg-zone-actions button {
+    background: var(--cg-surface) !important;
+    color: var(--cg-primary) !important;
+    border: 1px solid var(--cg-primary) !important;
+    border-radius: var(--cg-radius-sm) !important;
+    padding: 0.3rem 0.85rem !important;
+    font-size: 0.82rem !important;
+    font-weight: 600 !important;
+    line-height: 1.2 !important;
+    min-height: 0 !important;
+    width: auto !important;
+    align-self: flex-start;
+    transition: all 0.15s ease;
+}
+#cg-trend-controls .cg-zone-actions button:hover {
+    background: var(--cg-primary) !important;
+    color: #fff !important;
+    box-shadow: var(--cg-shadow-sm) !important;
+}
+#cg-trend-controls .cg-zone-actions button:active {
+    transform: translateY(1px);
 }
 
 #cg-trend-chart {
