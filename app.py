@@ -278,7 +278,11 @@ def _family_window_stats(
         if "Workflow" not in agg.columns:
             agg["Workflow"] = ""
         agg["Task"] = t
-        agg["Std"] = agg["Std"].fillna(0.0)
+        # Keep Std as NaN when N==1 — a 0-filled std reads visually
+        # identical to a tight 7-day std and dishonestly suggests
+        # "rock solid." We also blank Std at N<3 so the chart suppresses
+        # whiskers below the threshold where std is meaningful.
+        agg.loc[agg["#Days"] < 3, "Std"] = float("nan")
         rows.append(agg)
 
     if not rows:
@@ -361,6 +365,7 @@ def build_family_chart(
     else:
         y_range = None
     fig.update_layout(
+        autosize=True,
         xaxis_title="Model (release order →)",
         yaxis_title="Score (%)",
         yaxis=dict(range=y_range) if y_range else dict(),
@@ -384,8 +389,8 @@ def filter_family_data(
     table = _family_window_stats(
         TREND_HISTORY_DF, family, workflow_filter, date_from, date_to, tasks
     )
-    timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
-    return chart, table, timestamp
+    stamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    return chart, table, f"<small>Last view: {stamp}</small>"
 
 
 def refresh_family_data(
@@ -407,7 +412,9 @@ def refresh_family_data(
         print(f"WARNING: Failed to refresh trend data: {e}")
         TREND_SUMMARY_DF = pd.DataFrame()
         TREND_HISTORY_DF = pd.DataFrame()
-    return filter_family_data(family, workflow_filter, date_from, date_to, tasks)
+    chart, table, _ = filter_family_data(family, workflow_filter, date_from, date_to, tasks)
+    stamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    return chart, table, f"<small>Hub data: {stamp}</small>"
 
 
 def _default_family_window(history_df: pd.DataFrame) -> tuple[str, str]:
@@ -537,10 +544,8 @@ def build_trend_chart(
         fig.update_layout(xaxis_title="Date", yaxis_title="Average Score (%)")
         return fig
 
-    # Build a display label combining model name and workflow
+    # When workflow=All, distinguish single vs multi with line dash.
     if "workflow" in df.columns and workflow_filter == "All":
-        df["label"] = df["model"] + " (" + df["workflow"] + ")"
-        # Use dash style to distinguish workflows
         fig = px.line(
             df,
             x="eval_date",
@@ -573,16 +578,19 @@ def build_trend_chart(
 
     # Y-axis: auto-scale with a small padding around the visible
     # min/max so points don't sit flush against the chart edges.
+    # Upper limit drifts to 105 (matching the Family chart's 110 cap
+    # in spirit) so a 99-score point keeps a bit of breathing room.
     visible = df["average"].dropna()
     if not visible.empty:
         y_min, y_max = float(visible.min()), float(visible.max())
         span = y_max - y_min
         pad = max(span * 0.1, 2.0)  # at least 2 percentage points of headroom
-        y_range = [max(0.0, y_min - pad), min(100.0, y_max + pad)]
+        y_range = [max(0.0, y_min - pad), min(105.0, y_max + pad)]
     else:
         y_range = None
 
     fig.update_layout(
+        autosize=True,
         xaxis_title="Date",
         yaxis_title="Average Score (%)",
         legend_title="Model",
@@ -602,8 +610,8 @@ def filter_trend_data(
     history_df = TREND_HISTORY_DF
     summary_df = _window_stats(history_df, workflow_filter, models, date_from, date_to)
     chart = build_trend_chart(history_df, workflow_filter, models, date_from, date_to)
-    timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
-    return chart, summary_df, timestamp
+    stamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    return chart, summary_df, f"<small>Last view: {stamp}</small>"
 
 
 def refresh_trend_data(
@@ -634,8 +642,163 @@ def refresh_trend_data(
         TREND_SUMMARY_DF = pd.DataFrame()
         TREND_HISTORY_DF = pd.DataFrame()
 
-    # Delegate to the lightweight filter function for the current view.
-    return filter_trend_data(workflow_filter, models, date_from, date_to)
+    # Delegate to the lightweight filter function for the current view,
+    # then override the timestamp prefix so the caption flags this as a
+    # Hub pull (not just a re-filter).
+    chart, summary_df, _ = filter_trend_data(workflow_filter, models, date_from, date_to)
+    stamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    return chart, summary_df, f"<small>Hub data: {stamp}</small>"
+
+
+# =========================================================================
+# Highlights view — top-10 hero + per-task top-5 mini bars
+# =========================================================================
+
+_MODEL_LINK_RE = _re.compile(r"<a[^>]*>(.*?)</a>", _re.IGNORECASE | _re.DOTALL)
+
+
+def _strip_model_markdown(s: str) -> str:
+    """Pull the visible model name out of the markdown anchor stored in the
+    leaderboard's Model column."""
+    if not isinstance(s, str):
+        return str(s)
+    m = _MODEL_LINK_RE.search(s)
+    return (m.group(1) if m else s).strip()
+
+
+def _family_logo_url(family: str) -> str:
+    """Hugging Face org avatar URL. Returns a placeholder for unknowns."""
+    if not family:
+        return ""
+    return f"https://huggingface.co/api/organizations/{family}/avatar"
+
+
+_TASK_COL_NAMES = None
+def _task_col_names() -> list[str]:
+    global _TASK_COL_NAMES
+    if _TASK_COL_NAMES is None:
+        from src.about import Tasks
+        _TASK_COL_NAMES = [t.value.col_name for t in Tasks]
+    return _TASK_COL_NAMES
+
+
+def _topn_for_column(df: pd.DataFrame, score_col: str, n: int) -> pd.DataFrame:
+    """Return the top-N rows of `df` by `score_col`, with the columns
+    needed to draw a Highlights bar: (display_name, family, score)."""
+    cols_needed = ["Model", "Model Family", score_col]
+    missing = [c for c in cols_needed if c not in df.columns]
+    if missing or df.empty:
+        return pd.DataFrame(columns=["display", "family", "score"])
+    out = df[cols_needed].dropna(subset=[score_col]).copy()
+    if out.empty:
+        return pd.DataFrame(columns=["display", "family", "score"])
+    out["display"] = out["Model"].map(_strip_model_markdown)
+    out["family"] = out["Model Family"].fillna("unknown")
+    # Strip "org/" prefix from the model display name — the org is
+    # already encoded by the logo to the left of each tick, so
+    # repeating it in the text just makes the y-axis labels long
+    # enough to overlap the logo column.
+    out["display"] = out["display"].str.replace(r"^[^/]+/", "", regex=True)
+    out["score"] = out[score_col]
+    out = out.sort_values("score", ascending=False).head(n).reset_index(drop=True)
+    return out[["display", "family", "score"]]
+
+
+def _build_highlight_bar(
+    df: pd.DataFrame, score_col: str, n: int, title: str, height: int
+):
+    """Horizontal Plotly bar with logo images next to each model tick."""
+    top = _topn_for_column(df, score_col, n)
+    fig = px.bar(orientation="h", title=title)
+    if top.empty:
+        fig.update_layout(
+            height=height,
+            xaxis_title="Score (%)",
+            yaxis_title="",
+            margin=dict(l=140, r=20, t=40, b=30),
+            annotations=[dict(
+                text="No data", showarrow=False,
+                xref="paper", yref="paper", x=0.5, y=0.5,
+            )],
+        )
+        return fig
+
+    # Force the y-axis category order to follow our descending-score
+    # ordering. Without this, color="family" makes Plotly draw one
+    # trace per family and the categorical y axis ends up grouped by
+    # family ("anthropic block" then "openai block") instead of by
+    # rank. With autorange="reversed", the first entry in this list
+    # lands at the top of the chart.
+    order = top["display"].tolist()
+    fig = px.bar(
+        top,
+        x="score",
+        y="display",
+        orientation="h",
+        color="family",
+        text=top["score"].round(1).astype(str) + "%",
+        title=title,
+        labels={"score": "Score (%)", "display": "", "family": "Family"},
+        category_orders={"display": order},
+    )
+    fig.update_traces(
+        textposition="outside",
+        cliponaxis=False,
+    )
+    # Put logos in their own column to the LEFT of the model-name
+    # ticks (x=-0.18 paper coord, well into the left margin) so the
+    # logo image and the text don't sit on top of each other. The
+    # left margin is widened to 230px to host both.
+    images = []
+    for _, row in top.iterrows():
+        url = _family_logo_url(row["family"])
+        if not url:
+            continue
+        images.append(dict(
+            source=url,
+            xref="paper", yref="y",
+            x=-0.18, y=row["display"],
+            sizex=0.05, sizey=0.7,
+            xanchor="center", yanchor="middle",
+            layer="above",
+        ))
+    fig.update_layout(
+        autosize=True,
+        height=height,
+        margin=dict(l=230, r=60, t=50, b=30),
+        xaxis=dict(range=[0, 110], title="Score (%)"),
+        # category_orders above already pins the order. Don't ALSO
+        # set autorange="reversed" — that double-flips and puts the
+        # worst model at the top.
+        yaxis=dict(title="", automargin=True),
+        showlegend=False,
+        images=images,
+        plot_bgcolor="rgba(0,0,0,0)",
+        paper_bgcolor="rgba(0,0,0,0)",
+    )
+    return fig
+
+
+def build_highlights_hero(df: pd.DataFrame, workflow_label: str):
+    """Top-10 by overall Average for the given benchmark."""
+    return _build_highlight_bar(
+        df,
+        score_col="Average ⬆️",
+        n=10,
+        title=f"{workflow_label} — Top 10 by Average",
+        height=520,
+    )
+
+
+def build_highlights_task_grid(df: pd.DataFrame) -> list[tuple[str, "object"]]:
+    """List of (task_name, figure) for the 12 per-task top-5 mini bars."""
+    out = []
+    for task in _task_col_names():
+        if task not in df.columns:
+            continue
+        fig = _build_highlight_bar(df, score_col=task, n=5, title=task, height=300)
+        out.append((task, fig))
+    return out
 
 
 def init_leaderboard(dataframe):
@@ -665,22 +828,48 @@ with demo:
     gr.Markdown(INTRODUCTION_TEXT, elem_classes="markdown-text", elem_id="cg-intro-block")
 
     with gr.Tabs(elem_classes="tab-buttons") as tabs:
+        def _benchmark_subtabs(label: str, df: pd.DataFrame, base_elem_id: str):
+            """Render Highlights + Full table sub-tabs for one benchmark."""
+            full_tab_idx = 1  # the View all button switches to this sub-tab
+            n_models = 0 if df is None or df.empty else len(df)
+            with gr.Tabs(elem_classes="tab-buttons", elem_id=f"{base_elem_id}-subtabs") as subtabs:
+                with gr.TabItem("🏆 Highlights", id=0):
+                    gr.Plot(
+                        value=build_highlights_hero(df, label),
+                        elem_id=f"{base_elem_id}-hero",
+                        elem_classes="cg-highlight-plot",
+                    )
+                    gr.HTML('<div class="cg-task-grid-label">By task — top 5</div>')
+                    # Use plain gr.Column (single-column stack) and let CSS
+                    # turn its inner .cg-task-card children into a responsive
+                    # grid. Using gr.Row here caused Gradio to wedge the
+                    # whole Highlights view into half the page width.
+                    with gr.Column(elem_classes="cg-task-grid"):
+                        for task_name, fig in build_highlights_task_grid(df):
+                            with gr.Column(elem_classes="cg-task-card"):
+                                gr.Plot(
+                                    value=fig,
+                                    elem_classes="cg-task-plot",
+                                )
+                    view_all_btn = gr.Button(
+                        f"Open full table ({n_models} models) →",
+                        size="sm",
+                        elem_id=f"{base_elem_id}-viewall",
+                        elem_classes="cg-viewall-btn",
+                    )
+                with gr.TabItem("📊 Full table", id=full_tab_idx) as full_tab:
+                    init_leaderboard(df)
+            view_all_btn.click(
+                fn=lambda: gr.Tabs(selected=full_tab_idx), outputs=subtabs
+            )
+
         with gr.TabItem("🏅 Single-Agent Benchmark", elem_id="llm-benchmark-tab-table", id=0):
-            leaderboard = init_leaderboard(LEADERBOARD_DF)
+            _benchmark_subtabs("Single-Agent", LEADERBOARD_DF, "cg-single")
 
         with gr.TabItem("🤝 Multi-Agent Benchmark", elem_id="multi-agent-benchmark-tab-table", id=1):
-            leaderboard_multi = init_leaderboard(LEADERBOARD_DF_MULTI)
+            _benchmark_subtabs("Multi-Agent", LEADERBOARD_DF_MULTI, "cg-multi")
 
         with gr.TabItem("📈 Trends", elem_id="llm-benchmark-tab-trends", id=2):
-            gr.Markdown(
-                "### Performance Trends\n"
-                "Two views: **Over time** tracks how individual models drift "
-                "day-to-day; **Family evolution** lines up models in a family "
-                "by release order so you can see whether newer versions are "
-                "actually better.",
-                elem_classes="markdown-text",
-                elem_id="cg-trends-header",
-            )
             # Default to single_agent + its top-3 models by latest score.
             _default_workflow = "single_agent"
             _initial_history = (
@@ -690,7 +879,12 @@ with demo:
             )
             _initial_models = _top_n_models(_initial_history, n=3)
             _data_min, _data_max = _data_date_bounds(TREND_HISTORY_DF)
-            _fam_from_default, _fam_to_default = _default_family_window(TREND_HISTORY_DF)
+            # Family-evolution defaults: full-range window (was 7d, which
+            # hid models that weren't re-evaluated last week), Average
+            # task only (was [Average, Reaction Energy] — biased toward
+            # the hardest task), and single_agent (was All — turned on
+            # the pattern-stripe encoding before the user opted in).
+            _fam_from_default, _fam_to_default = _data_min, _data_max
             _all_fams = _all_families(TREND_HISTORY_DF)
             _default_family = "openai" if "openai" in _all_fams else (_all_fams[0] if _all_fams else "")
 
@@ -740,13 +934,14 @@ with demo:
                                 f'style="display:none"></span>'
                             )
                         with gr.Column(scale=3, min_width=180, elem_classes="cg-zone cg-zone-actions"):
-                            last_updated_box = gr.Textbox(
-                                label="Last updated",
-                                value=datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC"),
-                                interactive=False,
-                            )
                             refresh_btn = gr.Button(
-                                "🔄 Refresh", size="sm", elem_id="cg-refresh-btn"
+                                "🔄 Re-pull from Hub",
+                                size="sm",
+                                elem_id="cg-refresh-btn",
+                            )
+                            last_updated_box = gr.Markdown(
+                                value=f"<small>Last view: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}</small>",
+                                elem_classes="cg-last-updated",
                             )
                     trend_chart = gr.Plot(
                         value=build_trend_chart(
@@ -786,16 +981,16 @@ with demo:
                         fn=refresh_trend_data,
                         inputs=_trend_inputs,
                         outputs=[trend_chart, trend_table, last_updated_box],
+                        show_progress="full",
                     )
 
                 # ---------- Sub-tab 2: Family evolution ----------
                 with gr.TabItem("Family evolution", id=1):
                     _fam_task_choices = _family_task_choices()
-                    _fam_default_tasks = [
-                        t for t in ("Average", "Reaction Energy")
-                        if t in _fam_task_choices
-                    ]
-                    _fam_default_workflow = "All"
+                    _fam_default_tasks = (
+                        ["Average"] if "Average" in _fam_task_choices else []
+                    )
+                    _fam_default_workflow = "single_agent"
                     with gr.Row(elem_id="cg-family-controls", elem_classes="cg-controls-row", equal_height=True):
                         with gr.Column(scale=10, min_width=360, elem_classes="cg-zone cg-zone-data"):
                             with gr.Row():
@@ -846,13 +1041,14 @@ with demo:
                                 f'style="display:none"></span>'
                             )
                         with gr.Column(scale=3, min_width=180, elem_classes="cg-zone cg-zone-actions"):
-                            fam_last_updated = gr.Textbox(
-                                label="Last updated",
-                                value=datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC"),
-                                interactive=False,
-                            )
                             fam_refresh_btn = gr.Button(
-                                "🔄 Refresh", size="sm", elem_id="cg-fam-refresh-btn"
+                                "🔄 Re-pull from Hub",
+                                size="sm",
+                                elem_id="cg-fam-refresh-btn",
+                            )
+                            fam_last_updated = gr.Markdown(
+                                value=f"<small>Last view: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}</small>",
+                                elem_classes="cg-last-updated",
                             )
                     family_chart = gr.Plot(
                         value=build_family_chart(
@@ -894,6 +1090,7 @@ with demo:
                         fn=refresh_family_data,
                         inputs=_family_inputs,
                         outputs=[family_chart, family_table, fam_last_updated],
+                        show_progress="full",
                     )
 
         with gr.TabItem("📝 About", elem_id="llm-benchmark-tab-table", id=3):

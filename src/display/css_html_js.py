@@ -314,21 +314,6 @@ custom_css = """
 /* ============================================================
    6. TRENDS TAB
    ============================================================ */
-#cg-trends-header {
-    background: var(--cg-surface) !important;
-    border: 1px solid var(--cg-border) !important;
-    border-radius: var(--cg-radius) !important;
-    padding: 1rem 1.5rem !important;
-    box-shadow: var(--cg-shadow-sm) !important;
-    margin-bottom: 0.5rem !important;
-}
-
-#cg-trends-header h3 {
-    color: var(--cg-primary) !important;
-    font-weight: 600 !important;
-    margin-bottom: 0.3rem !important;
-}
-
 /* Trends controls — one bordered card with three zones (Data / View /
    Actions) separated by thin vertical dividers. */
 .cg-controls-row {
@@ -421,6 +406,17 @@ custom_css = """
 }
 .cg-controls-row .cg-zone-data .wrap:has(.token) .wrap-inner .token {
     flex-shrink: 0 !important;
+}
+
+/* Last-view / Hub data caption — muted small text under Refresh. */
+.cg-controls-row .cg-zone-actions .cg-last-updated,
+.cg-controls-row .cg-zone-actions .cg-last-updated p,
+.cg-controls-row .cg-zone-actions .cg-last-updated small {
+    color: var(--cg-text-muted) !important;
+    font-size: 0.7rem !important;
+    line-height: 1.2 !important;
+    margin: 0 !important;
+    padding: 0 !important;
 }
 
 /* Refresh button — compact outline pill using the theme primary. */
@@ -714,6 +710,95 @@ custom_css = """
 }
 
 /* ============================================================
+   11b. HIGHLIGHTS SUB-TAB (top-10 hero + per-task top-5 grid)
+   ============================================================ */
+.cg-highlight-plot {
+    border: 1px solid var(--cg-border) !important;
+    border-radius: var(--cg-radius) !important;
+    box-shadow: var(--cg-shadow-sm) !important;
+    background: var(--cg-surface) !important;
+    overflow: hidden !important;
+    padding: 0.5rem !important;
+    margin-bottom: 0.5rem !important;
+    width: 100% !important;
+    min-width: 0 !important;
+}
+
+/* Note: a previous attempt put visibility:hidden on the plot hosts
+   and revealed them from JS after polling SVG width. It introduced
+   a visible "blank → narrow → correct" three-step flash because the
+   reveal-poll timed out while Plotly was still relayouting. Removed —
+   Gradio 5's PlotlyPlot.svelte already attaches a ResizeObserver
+   that handles the display:none→display:flex transition natively. */
+.cg-highlight-plot .js-plotly-plot,
+.cg-highlight-plot .plot-container,
+.cg-task-card .js-plotly-plot,
+.cg-task-card .plot-container {
+    width: 100% !important;
+}
+
+.cg-task-grid-label {
+    font-weight: 600;
+    color: var(--cg-text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-size: 0.78rem;
+    margin: 1.2rem 0 0.4rem;
+}
+
+/* Auto-fit grid: as many columns as fit, each at least 320px wide.
+   The grid container is a gr.Column (default display: flex column);
+   forcing display: grid + an explicit width:100% on the children
+   keeps cards tiled properly. */
+.cg-task-grid {
+    display: grid !important;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)) !important;
+    gap: 0.75rem !important;
+    width: 100% !important;
+    flex: 1 1 100% !important;
+    align-items: stretch;
+}
+.cg-task-card {
+    background: var(--cg-surface);
+    border: 1px solid var(--cg-border);
+    border-radius: var(--cg-radius);
+    box-shadow: var(--cg-shadow-sm);
+    padding: 0.45rem !important;
+    overflow: hidden;
+    min-width: 0 !important;
+    width: 100% !important;
+}
+.cg-task-card .cg-task-plot {
+    background: transparent !important;
+    border: 0 !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+}
+
+/* View all → button, same outline-pill look as the Refresh button. */
+.cg-viewall-btn {
+    background: var(--cg-surface) !important;
+    color: var(--cg-primary) !important;
+    border: 1px solid var(--cg-primary) !important;
+    border-radius: var(--cg-radius-sm) !important;
+    padding: 0.3rem 0.85rem !important;
+    font-size: 0.82rem !important;
+    font-weight: 600 !important;
+    line-height: 1.2 !important;
+    min-height: 0 !important;
+    width: auto !important;
+    align-self: flex-end;
+    margin: 0.3rem 0 0.6rem auto !important;
+    transition: all 0.15s ease;
+}
+.cg-viewall-btn:hover {
+    background: var(--cg-primary) !important;
+    color: #fff !important;
+    box-shadow: var(--cg-shadow-sm) !important;
+}
+
+/* ============================================================
    12. RESPONSIVE ADJUSTMENTS
    ============================================================ */
 @media (max-width: 768px) {
@@ -952,11 +1037,46 @@ group_columns_head = r"""
     });
   }
 
+  // Gradio 5.50's PlotlyPlot.svelte does NOT trigger Plotly.Plots.resize
+  // on the display:none → display:flex transition that happens when
+  // the user switches into Multi-Agent or Trends for the first time.
+  // ResizeObserver only fires on real box-size changes, and the parent
+  // already had its layout width before the tab was shown.
+  //
+  // Without a nudge, the chart stays at its initial (700px fallback)
+  // width forever. Earlier attempts to fix this combined a resize
+  // nudge with a visibility:hidden + reveal-poll, which introduced a
+  // "blank → narrow → correct" three-step flash. Lesson: do the
+  // resize, do NOT hide the host. The result is a brief sub-perceptual
+  // narrow→correct paint (Gradio PR #8740 / Plotly #2769) which is
+  // less bad than a permanently-narrow chart.
+  function nudgeVisiblePlotlyCharts() {
+    if (!window.Plotly) return;
+    document.querySelectorAll('.js-plotly-plot').forEach(chart => {
+      // offsetParent is null for display:none — skip; resize would do nothing.
+      if (!chart.offsetParent) return;
+      try { window.Plotly.Plots.resize(chart); } catch (e) {}
+    });
+  }
+
+  function wireTabClickResize() {
+    if (window.__cgTabHooked) return;
+    window.__cgTabHooked = true;
+    document.addEventListener('click', e => {
+      if (!e.target.closest('[role="tab"], .tab-buttons button')) return;
+      // Resize twice: once after Gradio flips display, once after the
+      // browser has actually laid out the newly-visible plot's parent.
+      requestAnimationFrame(() => requestAnimationFrame(nudgeVisiblePlotlyCharts));
+      setTimeout(nudgeVisiblePlotlyCharts, 200);
+    }, true);
+  }
+
   function pass() {
     const cols = findColumnSelectorContainers();
     const fils = findModelFamilyContainers();
     pairColAndMF(cols, fils).forEach(([c, f]) => reshape(c, f));
     upgradeDateInputs();
+    wireTabClickResize();
   }
 
   let pending = false;
