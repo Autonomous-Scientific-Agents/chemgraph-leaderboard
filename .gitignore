@@ -11,3 +11,11 @@ eval-results/
 eval-queue-bk/
 eval-results-bk/
 logs/
+
+# Per-machine dev config — contains a plaintext HF_TOKEN, never commit
+scripts/dev_env.sh
+
+# Local staging dirs / logs created by daily_eval.sh
+hub_results/
+hub_requests/
+eval*.log

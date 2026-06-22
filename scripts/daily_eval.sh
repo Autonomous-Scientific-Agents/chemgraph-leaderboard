@@ -4,7 +4,7 @@
 # This script is intended to be run via cron. Example crontab entry:
 #
 #   MAILTO=example@anl.gov
-#   0 2 * * * /home/tdpham2/chemgraph-leaderboard/scripts/daily_eval.sh >> /home/tdpham2/chemgraph-leaderboard/eval.log 2>&1
+#   0 2 * * * /home/zhye/leaderboard_dev/scripts/daily_eval.sh >> /home/zhye/leaderboard_dev/eval.log 2>&1
 #
 # Modes:
 #   Full pipeline (default):
@@ -17,8 +17,8 @@
 #     SKIP_EVAL=true ./scripts/daily_eval.sh
 #
 # Prerequisites:
-#   - conda environment at /home/tdpham2/ChemGraph/env/cg_mar31_env
-#   - HF_TOKEN environment variable set (via ~/.bashrc)
+#   - conda environment 'chemgraph' with the chemgraph-eval CLI installed
+#   - HF_TOKEN environment variable set (via scripts/dev_env.sh or ~/.bashrc)
 #   - config.toml in CHEMGRAPH_DIR with API keys for LLM providers
 #
 # Configuration — edit these variables or override via environment:
@@ -26,25 +26,38 @@
 set -euo pipefail
 
 # ---------- Environment Setup ----------
-# Source conda directly (bashrc has a non-interactive guard that skips conda init).
+# Source per-machine dev/prod overrides if present. This (untracked) file sets
+# CG_OWNER / CG_*_DATASET / HF_TOKEN for dev-vs-prod routing, plus machine
+# paths: CHEMGRAPH_DIR, CG_CONDA_ENV, CONDA_SH, ARGO_USER. Without it, the
+# hardcoded production defaults below apply.
+_SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 # shellcheck disable=SC1091
-source "$HOME/miniconda3/etc/profile.d/conda.sh"
-conda activate /home/tdpham2/ChemGraph/env/cg_mar31_env
+[ -f "$_SCRIPT_DIR/dev_env.sh" ] && source "$_SCRIPT_DIR/dev_env.sh"
 
-# Source bashrc for HF_TOKEN (force non-interactive bashrc to load).
+# Source conda (bashrc has a non-interactive guard that skips conda init).
+# Override the conda.sh path via CONDA_SH; falls back to miniforge3 then miniconda3.
+CONDA_SH="${CONDA_SH:-$HOME/miniforge3/etc/profile.d/conda.sh}"
+[ -f "$CONDA_SH" ] || CONDA_SH="$HOME/miniconda3/etc/profile.d/conda.sh"
+# shellcheck disable=SC1091
+source "$CONDA_SH"
+conda activate "${CG_CONDA_ENV:-chemgraph}"
+
+# Source bashrc for HF_TOKEN only if dev_env.sh didn't already provide it.
 # shellcheck disable=SC1090
-set +u  # bashrc may reference unset variables
-source "$HOME/.bashrc" 2>/dev/null || true
-set -u
+if [ -z "${HF_TOKEN:-}" ]; then
+    set +u  # bashrc may reference unset variables
+    source "$HOME/.bashrc" 2>/dev/null || true
+    set -u
+fi
 
-export ARGO_USER="${ARGO_USER:-tpham}"
+export ARGO_USER="${ARGO_USER:-zhye}"
 
 # ---------- Configuration ----------
 # Path to the chemgraph-leaderboard repo
 LEADERBOARD_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 
 # Path to the ChemGraph repo (where config.toml lives)
-CHEMGRAPH_DIR="${CHEMGRAPH_DIR:-/home/tdpham2/ChemGraph}"
+CHEMGRAPH_DIR="${CHEMGRAPH_DIR:-/home/zhye/ChemGraph}"
 
 # Skip the chemgraph eval step and only convert + push existing results.
 SKIP_EVAL="${SKIP_EVAL:-false}"
