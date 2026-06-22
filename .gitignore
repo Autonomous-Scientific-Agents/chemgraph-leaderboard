@@ -19,3 +19,6 @@ scripts/dev_env.sh
 hub_results/
 hub_requests/
 eval*.log
+
+# Local-only token/time metrics archive (never pushed to HF)
+eval_metrics/
