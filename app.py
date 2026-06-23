@@ -976,7 +976,7 @@ def build_efficiency_frontier(leaderboard_df: pd.DataFrame, metrics_df: pd.DataF
             ticks="outside", tickcolor=_AXIS_COLOR, zeroline=False,
         ),
         legend=dict(title_text="Family", yanchor="top", y=1.0,
-                    xanchor="left", x=1.02, bgcolor="rgba(0,0,0,0)"),
+                    xanchor="left", x=1.005, bgcolor="rgba(0,0,0,0)"),
         hovermode="closest",
         plot_bgcolor="rgba(0,0,0,0)",
         paper_bgcolor="rgba(0,0,0,0)",
@@ -989,7 +989,7 @@ def build_efficiency_frontier(leaderboard_df: pd.DataFrame, metrics_df: pd.DataF
                      (_HIGHLIGHT_EMOJI["cheap"], "cheapest")]
     for i, (emo, desc) in enumerate(_legend_lines):
         fig.add_annotation(
-            xref="paper", yref="paper", x=1.03, y=0.46 - i * 0.085,
+            xref="paper", yref="paper", x=1.005, y=0.46 - i * 0.085,
             xanchor="left", yanchor="middle", showarrow=False, align="left",
             text=f"{emo} {desc}", font=dict(size=12, color="#334155"),
         )
