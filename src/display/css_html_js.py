@@ -710,70 +710,86 @@ custom_css = """
 }
 
 /* ============================================================
-   11b. HIGHLIGHTS SUB-TAB (top-10 hero + per-task top-5 grid)
+   11b. HIGHLIGHTS SUB-TAB (KPI strip + efficiency frontier + task difficulty)
    ============================================================ */
-.cg-highlight-plot {
+
+/* KPI strip — 4 headline cards, pure HTML (paints before any Plotly). */
+.cg-kpi-strip {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    margin: 0.25rem 0 0.9rem;
+}
+.cg-kpi-card {
+    flex: 1 1 180px;
+    min-width: 160px;
+    background: var(--cg-surface);
+    border: 1px solid var(--cg-border);
+    border-radius: var(--cg-radius);
+    box-shadow: var(--cg-shadow-sm);
+    padding: 0.7rem 0.9rem;
+}
+.cg-kpi-label {
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--cg-text-muted);
+}
+.cg-kpi-value {
+    font-size: 1.7rem;
+    font-weight: 700;
+    color: var(--cg-primary);
+    line-height: 1.15;
+    margin: 0.15rem 0;
+}
+.cg-kpi-model {
+    font-size: 0.85rem;
+    color: var(--cg-text-primary);
+    word-break: break-word;
+}
+.cg-kpi-sub {
+    font-size: 0.7rem;
+    color: var(--cg-text-muted);
+    margin-top: 0.1rem;
+}
+.cg-kpi-empty {
+    color: var(--cg-text-muted);
+    padding: 1rem;
+}
+
+/* Frontier + task-difficulty plot framing (both use .cg-frontier-plot). */
+.cg-frontier-plot {
     border: 1px solid var(--cg-border) !important;
     border-radius: var(--cg-radius) !important;
     box-shadow: var(--cg-shadow-sm) !important;
     background: var(--cg-surface) !important;
     overflow: hidden !important;
     padding: 0.5rem !important;
-    margin-bottom: 0.5rem !important;
     width: 100% !important;
     min-width: 0 !important;
 }
-
-/* Note: a previous attempt put visibility:hidden on the plot hosts
-   and revealed them from JS after polling SVG width. It introduced
-   a visible "blank → narrow → correct" three-step flash because the
-   reveal-poll timed out while Plotly was still relayouting. Removed —
-   Gradio 5's PlotlyPlot.svelte already attaches a ResizeObserver
-   that handles the display:none→display:flex transition natively. */
-.cg-highlight-plot .js-plotly-plot,
-.cg-highlight-plot .plot-container,
-.cg-task-card .js-plotly-plot,
-.cg-task-card .plot-container {
+.cg-frontier-plot .js-plotly-plot,
+.cg-frontier-plot .plot-container {
     width: 100% !important;
 }
 
-.cg-task-grid-label {
-    font-weight: 600;
-    color: var(--cg-text-secondary);
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    font-size: 0.78rem;
-    margin: 1.2rem 0 0.4rem;
+/* Small uppercase caption above each chart. */
+/* Bold dark chart title (黑体). */
+.cg-section-label {
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--cg-text-primary);
+    margin: 1rem 0 0.1rem;
+    line-height: 1.35;
 }
-
-/* Auto-fit grid: as many columns as fit, each at least 320px wide.
-   The grid container is a gr.Column (default display: flex column);
-   forcing display: grid + an explicit width:100% on the children
-   keeps cards tiled properly. */
-.cg-task-grid {
-    display: grid !important;
-    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)) !important;
-    gap: 0.75rem !important;
-    width: 100% !important;
-    flex: 1 1 100% !important;
-    align-items: stretch;
-}
-.cg-task-card {
-    background: var(--cg-surface);
-    border: 1px solid var(--cg-border);
-    border-radius: var(--cg-radius);
-    box-shadow: var(--cg-shadow-sm);
-    padding: 0.45rem !important;
-    overflow: hidden;
-    min-width: 0 !important;
-    width: 100% !important;
-}
-.cg-task-card .cg-task-plot {
-    background: transparent !important;
-    border: 0 !important;
-    box-shadow: none !important;
-    padding: 0 !important;
-    margin: 0 !important;
+/* Lighter one-line description under the title. */
+.cg-section-sub {
+    font-size: 0.74rem;
+    font-weight: 400;
+    color: var(--cg-text-muted);
+    margin: 0 0 0.4rem;
+    line-height: 1.4;
 }
 
 /* View all → button, same outline-pill look as the Refresh button. */

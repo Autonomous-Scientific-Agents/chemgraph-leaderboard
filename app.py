@@ -6,6 +6,7 @@ import gradio as gr
 from gradio_leaderboard import Leaderboard, ColumnFilter, SelectColumns
 import pandas as pd
 import plotly.express as px
+import plotly.graph_objects as go
 from apscheduler.schedulers.background import BackgroundScheduler
 from huggingface_hub import snapshot_download
 
@@ -42,6 +43,7 @@ from src.envs import (
     get_eval_requests_path,
 )
 from src.leaderboard.read_evals import clear_eval_cache
+from src.leaderboard.metrics import get_metrics_df
 from src.populate import (
     get_evaluation_queue_df,
     get_leaderboard_df,
@@ -104,6 +106,11 @@ MULTI_AGENT_REQUESTS = get_eval_requests_path("multi_agent")
 
 LEADERBOARD_DF = get_leaderboard_df(SINGLE_AGENT_RESULTS, SINGLE_AGENT_REQUESTS, COLS, BENCHMARK_COLS)
 LEADERBOARD_DF_MULTI = get_leaderboard_df(MULTI_AGENT_RESULTS, MULTI_AGENT_REQUESTS, COLS, BENCHMARK_COLS)
+
+# Per-model token-consumption metrics (side-channel CSV), keyed by full_model.
+# The Highlights view joins these against the accuracy leaderboard.
+METRICS_DF = get_metrics_df("single_agent")
+METRICS_DF_MULTI = get_metrics_df("multi_agent")
 
 # Load combined trend data for the Trends tab
 try:
@@ -666,13 +673,6 @@ def _strip_model_markdown(s: str) -> str:
     return (m.group(1) if m else s).strip()
 
 
-def _family_logo_url(family: str) -> str:
-    """Hugging Face org avatar URL. Returns a placeholder for unknowns."""
-    if not family:
-        return ""
-    return f"https://huggingface.co/api/organizations/{family}/avatar"
-
-
 _TASK_COL_NAMES = None
 def _task_col_names() -> list[str]:
     global _TASK_COL_NAMES
@@ -682,123 +682,325 @@ def _task_col_names() -> list[str]:
     return _TASK_COL_NAMES
 
 
-def _topn_for_column(df: pd.DataFrame, score_col: str, n: int) -> pd.DataFrame:
-    """Return the top-N rows of `df` by `score_col`, with the columns
-    needed to draw a Highlights bar: (display_name, family, score)."""
-    cols_needed = ["Model", "Model Family", score_col]
-    missing = [c for c in cols_needed if c not in df.columns]
-    if missing or df.empty:
-        return pd.DataFrame(columns=["display", "family", "score"])
-    out = df[cols_needed].dropna(subset=[score_col]).copy()
-    if out.empty:
-        return pd.DataFrame(columns=["display", "family", "score"])
-    out["display"] = out["Model"].map(_strip_model_markdown)
-    out["family"] = out["Model Family"].fillna("unknown")
-    # Strip "org/" prefix from the model display name — the org is
-    # already encoded by the logo to the left of each tick, so
-    # repeating it in the text just makes the y-axis labels long
-    # enough to overlap the logo column.
-    out["display"] = out["display"].str.replace(r"^[^/]+/", "", regex=True)
-    out["score"] = out[score_col]
-    out = out.sort_values("score", ascending=False).head(n).reset_index(drop=True)
-    return out[["display", "family", "score"]]
+_AVERAGE_COL = "Average ⬆️"
+_HARDEST_TASK = "Reaction Energy"  # weight-10, historically lowest-scoring
+_ACC_FLOOR = 60  # frontier: don't plot models below this overall accuracy
+
+# Highlighted picks: shared between the KPI cards and the frontier markers so
+# both point at the same models. Emoji marks each on the scatter.
+_HIGHLIGHT_EMOJI = {"best": "👑", "eff": "⚡", "cheap": "💰"}
+
+# Shared chart chrome (slate, semi-transparent so it reads on both themes).
+_GRID_COLOR = "rgba(148,163,184,0.28)"
+_GRID_COLOR_MINOR = "rgba(148,163,184,0.12)"
+_AXIS_COLOR = "rgba(100,116,139,0.65)"
 
 
-def _build_highlight_bar(
-    df: pd.DataFrame, score_col: str, n: int, title: str, height: int
-):
-    """Horizontal Plotly bar with logo images next to each model tick."""
-    top = _topn_for_column(df, score_col, n)
-    fig = px.bar(orientation="h", title=title)
-    if top.empty:
+def _highlights_base(leaderboard_df: pd.DataFrame, metrics_df: pd.DataFrame) -> pd.DataFrame:
+    """Join accuracy (from the leaderboard) with token cost (from metrics).
+
+    One row per model: display name, family, Average, the 12 task accuracy
+    columns, plus tokens_per_query / accuracy_per_1k_tokens / low_conf from
+    the metrics CSV (NaN when a model has no token data). Sorted by Average
+    descending. Accuracy always comes from the leaderboard — the metrics CSV
+    contributes only the token columns.
+    """
+    empty_cols = ["display", "full_model", "family", _AVERAGE_COL,
+                  "tokens_per_query", "accuracy_per_1k_tokens", "low_conf"]
+    if leaderboard_df is None or leaderboard_df.empty or _AVERAGE_COL not in leaderboard_df.columns:
+        return pd.DataFrame(columns=empty_cols)
+
+    df = leaderboard_df.copy()
+    df["full_model"] = df["Model"].map(_strip_model_markdown)
+    df["display"] = df["full_model"].str.replace(r"^[^/]+/", "", regex=True)
+    df["family"] = df.get("Model Family", "unknown")
+    if "family" in df:
+        df["family"] = df["family"].fillna("unknown")
+
+    if metrics_df is not None and not metrics_df.empty:
+        m = metrics_df[["full_model", "tokens_per_query", "accuracy_per_1k_tokens", "low_conf"]]
+        df = df.merge(m, on="full_model", how="left")
+    else:
+        df["tokens_per_query"] = pd.NA
+        df["accuracy_per_1k_tokens"] = pd.NA
+        df["low_conf"] = False
+
+    return df.sort_values(_AVERAGE_COL, ascending=False).reset_index(drop=True)
+
+
+def _fmt_tokens(v) -> str:
+    """Human token count, e.g. 24189 -> '24.2k'."""
+    if v is None or (isinstance(v, float) and pd.isna(v)):
+        return "—"
+    return f"{v / 1000:.1f}k"
+
+
+def _highlight_picks(base: pd.DataFrame) -> dict:
+    """The three models the KPI cards and the frontier markers both highlight.
+
+    - "best":  highest overall accuracy, ties broken by FEWEST tokens (so a
+               cheaper model wins a tie with an equally-accurate pricier one).
+    - "eff":   highest accuracy per 1k tokens.
+    - "cheap": fewest tokens per query.
+    Returns {key: row}; keys missing when the needed data is absent.
+    """
+    picks: dict = {}
+    if base is None or base.empty:
+        return picks
+    b = base.copy()
+    b["_acc"] = pd.to_numeric(b[_AVERAGE_COL], errors="coerce")
+    b["_tok"] = pd.to_numeric(b["tokens_per_query"], errors="coerce")
+    # Efficiency from the SAME accuracy shown everywhere (leaderboard Average,
+    # 0..100), not the metrics CSV's separate accuracy — keeps the picks
+    # internally consistent. Units: accuracy-points per 1k tokens.
+    b["_eff"] = b["_acc"] / (b["_tok"] / 1000.0)
+
+    bo = b.dropna(subset=["_acc"]).sort_values(
+        ["_acc", "_tok"], ascending=[False, True], na_position="last")
+    if not bo.empty:
+        picks["best"] = bo.iloc[0]
+    eff = b.dropna(subset=["_eff"])
+    if not eff.empty:
+        picks["eff"] = eff.loc[eff["_eff"].idxmax()]
+    ch = b.dropna(subset=["_tok"])
+    if not ch.empty:
+        picks["cheap"] = ch.loc[ch["_tok"].idxmin()]
+    return picks
+
+
+def build_kpi_strip(leaderboard_df: pd.DataFrame, metrics_df: pd.DataFrame) -> str:
+    """Four headline KPI cards as a single HTML block (no Plotly)."""
+    base = _highlights_base(leaderboard_df, metrics_df)
+    if base.empty:
+        return '<div class="cg-kpi-strip"><div class="cg-kpi-empty">No data available.</div></div>'
+
+    def card(label: str, value: str, model: str, sub: str = "") -> str:
+        sub_html = f'<div class="cg-kpi-sub">{sub}</div>' if sub else ""
+        return (
+            '<div class="cg-kpi-card">'
+            f'<div class="cg-kpi-label">{label}</div>'
+            f'<div class="cg-kpi-value">{value}</div>'
+            f'<div class="cg-kpi-model">{model}</div>'
+            f'{sub_html}'
+            "</div>"
+        )
+
+    picks = _highlight_picks(base)
+    cards = []
+
+    # Best overall: highest accuracy, ties broken by fewest tokens.
+    if "best" in picks:
+        row = picks["best"]
+        sub = f"{_fmt_tokens(row['tokens_per_query'])} tok/q" if pd.notna(row.get("tokens_per_query")) else ""
+        cards.append(card(f"{_HIGHLIGHT_EMOJI['best']} Best overall",
+                          f"{row[_AVERAGE_COL]:.0f}%", row["display"], sub))
+
+    # Most efficient (max accuracy per 1k tokens, using leaderboard accuracy).
+    if "eff" in picks:
+        row = picks["eff"]
+        cards.append(card(f"{_HIGHLIGHT_EMOJI['eff']} Most efficient",
+                          f"{row['_eff']:.1f}", row["display"],
+                          "accuracy pts / 1k tokens"))
+    else:
+        cards.append(card(f"{_HIGHLIGHT_EMOJI['eff']} Most efficient", "—", "no token data"))
+
+    # Cheapest per query (min tokens).
+    if "cheap" in picks:
+        row = picks["cheap"]
+        cards.append(card(f"{_HIGHLIGHT_EMOJI['cheap']} Cheapest / query",
+                          _fmt_tokens(row["tokens_per_query"]), row["display"],
+                          "avg tokens per query"))
+    else:
+        cards.append(card(f"{_HIGHLIGHT_EMOJI['cheap']} Cheapest / query", "—", "no token data"))
+
+    # Best on hardest task (Reaction Energy)
+    if _HARDEST_TASK in base.columns:
+        hard = base.dropna(subset=[_HARDEST_TASK])
+        if not hard.empty:
+            row = hard.loc[hard[_HARDEST_TASK].idxmax()]
+            cards.append(card("Best on hardest", f"{row[_HARDEST_TASK]:.0f}%",
+                              row["display"], _HARDEST_TASK))
+
+    return f'<div class="cg-kpi-strip">{"".join(cards)}</div>'
+
+
+def build_task_difficulty(leaderboard_df: pd.DataFrame):
+    """Horizontal bar chart of per-task difficulty: the mean accuracy across
+    all models for each of the 12 tasks, sorted hardest-first. This is an
+    aggregate view the per-model table doesn't give — it shows where the whole
+    field struggles. Bars are colored on a red→green scale (red = hard)."""
+    fig = go.Figure()
+    if leaderboard_df is None or leaderboard_df.empty:
         fig.update_layout(
-            height=height,
-            xaxis_title="Score (%)",
-            yaxis_title="",
-            margin=dict(l=140, r=20, t=40, b=30),
-            annotations=[dict(
-                text="No data", showarrow=False,
-                xref="paper", yref="paper", x=0.5, y=0.5,
-            )],
+            height=300,
+            annotations=[dict(text="No data", showarrow=False,
+                              xref="paper", yref="paper", x=0.5, y=0.5)],
         )
         return fig
 
-    # Force the y-axis category order to follow our descending-score
-    # ordering. Without this, color="family" makes Plotly draw one
-    # trace per family and the categorical y axis ends up grouped by
-    # family ("anthropic block" then "openai block") instead of by
-    # rank. With autorange="reversed", the first entry in this list
-    # lands at the top of the chart.
-    order = top["display"].tolist()
-    fig = px.bar(
-        top,
-        x="score",
-        y="display",
+    tasks = [t for t in _task_col_names() if t in leaderboard_df.columns]
+    means = []
+    for t in tasks:
+        vals = pd.to_numeric(leaderboard_df[t], errors="coerce").dropna()
+        if not vals.empty:
+            means.append((t, float(vals.mean()), int(vals.shape[0])))
+    if not means:
+        fig.update_layout(
+            height=300,
+            annotations=[dict(text="No task data", showarrow=False,
+                              xref="paper", yref="paper", x=0.5, y=0.5)],
+        )
+        return fig
+
+    # Sort ascending so the hardest (lowest mean) ends up at the TOP: Plotly
+    # draws the first category at the bottom, so reverse for top-down order.
+    means.sort(key=lambda r: r[1])
+    names = [m[0] for m in means][::-1]
+    vals = [m[1] for m in means][::-1]
+    counts = [m[2] for m in means][::-1]
+
+    fig.add_trace(go.Bar(
+        x=vals,
+        y=names,
         orientation="h",
-        color="family",
-        text=top["score"].round(1).astype(str) + "%",
-        title=title,
-        labels={"score": "Score (%)", "display": "", "family": "Family"},
-        category_orders={"display": order},
-    )
-    fig.update_traces(
+        marker=dict(
+            color=vals,
+            colorscale="RdYlGn",
+            cmin=0, cmax=100,
+            line=dict(width=0),
+        ),
+        text=[f"{v:.0f}%" for v in vals],
         textposition="outside",
         cliponaxis=False,
-    )
-    # Put logos in their own column to the LEFT of the model-name
-    # ticks (x=-0.18 paper coord, well into the left margin) so the
-    # logo image and the text don't sit on top of each other. The
-    # left margin is widened to 230px to host both.
-    images = []
-    for _, row in top.iterrows():
-        url = _family_logo_url(row["family"])
-        if not url:
-            continue
-        images.append(dict(
-            source=url,
-            xref="paper", yref="y",
-            x=-0.18, y=row["display"],
-            sizex=0.05, sizey=0.7,
-            xanchor="center", yanchor="middle",
-            layer="above",
-        ))
+        customdata=counts,
+        hovertemplate="%{y}<br>mean %{x:.1f}% across %{customdata} models<extra></extra>",
+    ))
+
     fig.update_layout(
         autosize=True,
-        height=height,
-        margin=dict(l=230, r=60, t=50, b=30),
-        xaxis=dict(range=[0, 110], title="Score (%)"),
-        # category_orders above already pins the order. Don't ALSO
-        # set autorange="reversed" — that double-flips and puts the
-        # worst model at the top.
-        yaxis=dict(title="", automargin=True),
-        showlegend=False,
-        images=images,
+        height=max(320, 60 + len(names) * 26),
+        margin=dict(l=10, r=40, t=20, b=48),
+        xaxis=dict(
+            title="mean accuracy across models (%)",
+            range=[0, 105],
+            showgrid=True, gridcolor=_GRID_COLOR, gridwidth=1,
+            showline=True, linecolor=_AXIS_COLOR, linewidth=1.2, mirror=True,
+            ticks="outside", tickcolor=_AXIS_COLOR, zeroline=False,
+        ),
+        yaxis=dict(
+            title="", automargin=True,
+            showline=True, linecolor=_AXIS_COLOR, linewidth=1.2, mirror=True,
+            ticks="outside", tickcolor=_AXIS_COLOR,
+        ),
         plot_bgcolor="rgba(0,0,0,0)",
         paper_bgcolor="rgba(0,0,0,0)",
     )
     return fig
 
 
-def build_highlights_hero(df: pd.DataFrame, workflow_label: str):
-    """Top-10 by overall Average for the given benchmark."""
-    return _build_highlight_bar(
-        df,
-        score_col="Average ⬆️",
-        n=10,
-        title=f"{workflow_label} — Top 10 by Average",
-        height=520,
+def build_efficiency_frontier(leaderboard_df: pd.DataFrame, metrics_df: pd.DataFrame):
+    """Accuracy vs tokens/query scatter (linear x), colored by family.
+
+    The token spread here is < 1 order of magnitude (~3x), so a linear x-axis
+    is clearer than log. Only models at/above _ACC_FLOOR accuracy are plotted —
+    below that the run is effectively broken and just clutters the view. Models
+    without token data can't be placed on the cost axis and are skipped.
+    """
+    base_full = _highlights_base(leaderboard_df, metrics_df)
+    fig = go.Figure()
+    base = base_full
+    if not base.empty:
+        acc = pd.to_numeric(base[_AVERAGE_COL], errors="coerce")
+        base = base[acc >= _ACC_FLOOR]
+    pts = base.dropna(subset=["tokens_per_query"]) if not base.empty else base
+    if pts is None or pts.empty:
+        fig.update_layout(
+            height=300,
+            annotations=[dict(text="No token data", showarrow=False,
+                              xref="paper", yref="paper", x=0.5, y=0.5)],
+        )
+        return fig
+
+    palette = {"openai": "#10a37f", "anthropic": "#d97757", "google": "#4285f4"}
+    for fam, grp in pts.groupby("family"):
+        fig.add_trace(go.Scatter(
+            x=grp["tokens_per_query"],
+            y=grp[_AVERAGE_COL],
+            mode="markers+text",
+            name=str(fam),
+            marker=dict(size=12, color=palette.get(str(fam), "#94a3b8"),
+                        line=dict(width=1, color="white")),
+            text=grp["display"],
+            textposition="top center",
+            textfont={"size": 9},
+            cliponaxis=False,
+            hovertemplate="%{text}<br>%{y:.0f}%  ·  %{x:,.0f} tok/q<extra></extra>",
+        ))
+
+    # Mark the three highlighted picks (same models as the KPI cards) with an
+    # emoji just left of their marker. Stack emojis if one model wins twice.
+    picks = _highlight_picks(base_full)
+    by_point: dict = {}
+    for key in ("best", "eff", "cheap"):
+        row = picks.get(key)
+        if row is None:
+            continue
+        match = pts[pts["full_model"] == row["full_model"]]
+        if match.empty:
+            continue
+        x = float(match.iloc[0]["tokens_per_query"])
+        y = float(match.iloc[0][_AVERAGE_COL])
+        by_point.setdefault((x, y), []).append(_HIGHLIGHT_EMOJI[key])
+    for (x, y), emos in by_point.items():
+        fig.add_annotation(x=x, y=y, text="".join(emos), showarrow=False,
+                           xanchor="right", xshift=-11, yshift=1,
+                           font=dict(size=15))
+
+    n_dropped = 0 if base.empty else int(base["tokens_per_query"].isna().sum())
+    fig.update_layout(
+        autosize=True,
+        height=440,
+        margin=dict(l=64, r=116, t=30, b=58),
+        xaxis=dict(
+            title="Average tokens per query",
+            tickformat="~s",
+            showgrid=True, gridcolor=_GRID_COLOR, gridwidth=1,
+            showline=True, linecolor=_AXIS_COLOR, linewidth=1.2, mirror=True,
+            ticks="outside", tickcolor=_AXIS_COLOR, zeroline=False,
+        ),
+        yaxis=dict(
+            title="Overall accuracy (%)",
+            range=[_ACC_FLOOR, 102],
+            showgrid=True, gridcolor=_GRID_COLOR, gridwidth=1,
+            showline=True, linecolor=_AXIS_COLOR, linewidth=1.2, mirror=True,
+            ticks="outside", tickcolor=_AXIS_COLOR, zeroline=False,
+        ),
+        legend=dict(title_text="Family", yanchor="top", y=1.0,
+                    xanchor="left", x=1.02, bgcolor="rgba(0,0,0,0)"),
+        hovermode="closest",
+        plot_bgcolor="rgba(0,0,0,0)",
+        paper_bgcolor="rgba(0,0,0,0)",
     )
 
+    # Icon legend on the RIGHT side of the chart (kept out of the title). The
+    # per-point emoji above mark the actual models; this explains them.
+    _legend_lines = [(_HIGHLIGHT_EMOJI["best"], "best overall"),
+                     (_HIGHLIGHT_EMOJI["eff"], "most efficient"),
+                     (_HIGHLIGHT_EMOJI["cheap"], "cheapest")]
+    for i, (emo, desc) in enumerate(_legend_lines):
+        fig.add_annotation(
+            xref="paper", yref="paper", x=1.03, y=0.46 - i * 0.085,
+            xanchor="left", yanchor="middle", showarrow=False, align="left",
+            text=f"{emo} {desc}", font=dict(size=12, color="#334155"),
+        )
 
-def build_highlights_task_grid(df: pd.DataFrame) -> list[tuple[str, "object"]]:
-    """List of (task_name, figure) for the 12 per-task top-5 mini bars."""
-    out = []
-    for task in _task_col_names():
-        if task not in df.columns:
-            continue
-        fig = _build_highlight_bar(df, score_col=task, n=5, title=task, height=300)
-        out.append((task, fig))
-    return out
+    if n_dropped:
+        fig.add_annotation(
+            text=f"{n_dropped} model(s) hidden — no token data",
+            showarrow=False, xref="paper", yref="paper", x=1.0, y=-0.16,
+            xanchor="right", font=dict(size=10, color="#94a3b8"),
+        )
+    return fig
 
 
 def init_leaderboard(dataframe):
@@ -828,29 +1030,40 @@ with demo:
     gr.Markdown(INTRODUCTION_TEXT, elem_classes="markdown-text", elem_id="cg-intro-block")
 
     with gr.Tabs(elem_classes="tab-buttons") as tabs:
-        def _benchmark_subtabs(label: str, df: pd.DataFrame, base_elem_id: str):
-            """Render Highlights + Full table sub-tabs for one benchmark."""
+        def _benchmark_subtabs(label, df, metrics_df, base_elem_id):
+            """Render Highlights + Full table sub-tabs for one benchmark.
+
+            Highlights = a KPI strip (HTML) + the efficiency frontier
+            (accuracy vs token cost) + a task-difficulty ranking. Two Plotly
+            figures, both cross-cutting views the per-model full table can't
+            show. Token cost comes from metrics_df; accuracy from the
+            leaderboard df.
+            """
             full_tab_idx = 1  # the View all button switches to this sub-tab
             n_models = 0 if df is None or df.empty else len(df)
             with gr.Tabs(elem_classes="tab-buttons", elem_id=f"{base_elem_id}-subtabs") as subtabs:
                 with gr.TabItem("🏆 Highlights", id=0):
-                    gr.Plot(
-                        value=build_highlights_hero(df, label),
-                        elem_id=f"{base_elem_id}-hero",
-                        elem_classes="cg-highlight-plot",
+                    gr.HTML(build_kpi_strip(df, metrics_df))
+                    gr.HTML(
+                        '<div class="cg-section-label">Accuracy V.S. Token Cost</div>'
+                        '<div class="cg-section-sub">Upper-left = accurate &amp; cheap. '
+                        'Token = avg tokens / query.</div>'
                     )
-                    gr.HTML('<div class="cg-task-grid-label">By task — top 5</div>')
-                    # Use plain gr.Column (single-column stack) and let CSS
-                    # turn its inner .cg-task-card children into a responsive
-                    # grid. Using gr.Row here caused Gradio to wedge the
-                    # whole Highlights view into half the page width.
-                    with gr.Column(elem_classes="cg-task-grid"):
-                        for task_name, fig in build_highlights_task_grid(df):
-                            with gr.Column(elem_classes="cg-task-card"):
-                                gr.Plot(
-                                    value=fig,
-                                    elem_classes="cg-task-plot",
-                                )
+                    gr.Plot(
+                        value=build_efficiency_frontier(df, metrics_df),
+                        elem_id=f"{base_elem_id}-frontier",
+                        elem_classes="cg-frontier-plot",
+                    )
+                    gr.HTML(
+                        '<div class="cg-section-label">Task difficulty</div>'
+                        '<div class="cg-section-sub">Mean accuracy across all models — '
+                        'shorter / redder = harder for the field.</div>'
+                    )
+                    gr.Plot(
+                        value=build_task_difficulty(df),
+                        elem_id=f"{base_elem_id}-difficulty",
+                        elem_classes="cg-frontier-plot",
+                    )
                     view_all_btn = gr.Button(
                         f"Open full table ({n_models} models) →",
                         size="sm",
@@ -864,10 +1077,10 @@ with demo:
             )
 
         with gr.TabItem("🏅 Single-Agent Benchmark", elem_id="llm-benchmark-tab-table", id=0):
-            _benchmark_subtabs("Single-Agent", LEADERBOARD_DF, "cg-single")
+            _benchmark_subtabs("Single-Agent", LEADERBOARD_DF, METRICS_DF, "cg-single")
 
         with gr.TabItem("🤝 Multi-Agent Benchmark", elem_id="multi-agent-benchmark-tab-table", id=1):
-            _benchmark_subtabs("Multi-Agent", LEADERBOARD_DF_MULTI, "cg-multi")
+            _benchmark_subtabs("Multi-Agent", LEADERBOARD_DF_MULTI, METRICS_DF_MULTI, "cg-multi")
 
         with gr.TabItem("📈 Trends", elem_id="llm-benchmark-tab-trends", id=2):
             # Default to single_agent + its top-3 models by latest score.

@@ -22,3 +22,7 @@ eval*.log
 
 # Local-only token/time metrics archive (never pushed to HF)
 eval_metrics/
+
+# Token metrics CSV consumed by the Highlights view — lives in the HF results
+# dataset (read from eval-results/metrics/ when deployed), not in git.
+dataset/metrics/
