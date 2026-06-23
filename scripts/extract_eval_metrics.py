@@ -78,11 +78,23 @@ def load_json(path: Path) -> Optional[dict]:
         return None
 
 
+def _has_timing(entry: dict) -> bool:
+    """True if a (model, workflow) entry carries real instrumentation data."""
+    ta = entry.get("timing_aggregate") or {}
+    return (ta.get("n_queries") or 0) > 0 or bool(entry.get("per_query_timing"))
+
+
 def merge_benchmarks(paths: List[Path]) -> tuple[Dict[str, Dict[str, dict]], dict]:
     """Merge ``results[model][workflow]`` across benchmark files.
 
-    Later files (sorted by name, i.e. timestamp) win on conflict.  Returns the
-    merged results plus the metadata from the most recent file.
+    Later files (sorted by name, i.e. timestamp) win on conflict, EXCEPT a
+    populated entry is never overwritten by one lacking timing.  This matters
+    because the daily pipeline writes per-model benchmarks (Phase 1, with
+    timing) and then a combined ``--report all`` benchmark (Phase 2, loaded via
+    ``--resume``); if the checkpoint loader dropped timing, the later combined
+    benchmark would otherwise clobber the good per-model data.
+
+    Returns the merged results plus the metadata from the most recent file.
     """
     merged: Dict[str, Dict[str, dict]] = {}
     metadata: dict = {}
@@ -96,8 +108,14 @@ def merge_benchmarks(paths: List[Path]) -> tuple[Dict[str, Dict[str, dict]], dic
                 continue
             dst = merged.setdefault(model, {})
             for workflow, wf_data in model_data.items():
-                if isinstance(wf_data, dict):
-                    dst[workflow] = wf_data
+                if not isinstance(wf_data, dict):
+                    continue
+                existing = dst.get(workflow)
+                # Keep the existing entry only if it has timing and the new
+                # one does not; otherwise take the new (newer) entry.
+                if existing is not None and _has_timing(existing) and not _has_timing(wf_data):
+                    continue
+                dst[workflow] = wf_data
     return merged, metadata
 
 
