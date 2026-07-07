@@ -34,6 +34,20 @@ _SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 # shellcheck disable=SC1091
 [ -f "$_SCRIPT_DIR/dev_env.sh" ] && source "$_SCRIPT_DIR/dev_env.sh"
 
+# ---------- Push target (dev vs prod) ----------
+# PUSH_TARGET=dev (default) keeps the dev_env.sh routing (InkedWings/*-dev).
+# PUSH_TARGET=prod overrides the CG_* routing vars back to the production
+# defaults from src/envs.py (Autonomous-Scientific-Agents/{chemgraph-leaderboard,
+# results, requests}) while keeping HF_TOKEN + machine paths from dev_env.sh.
+PUSH_TARGET="${PUSH_TARGET:-dev}"
+if [ "$PUSH_TARGET" = "prod" ]; then
+    export CG_OWNER="Autonomous-Scientific-Agents"
+    export CG_SPACE_NAME="chemgraph-leaderboard"
+    export CG_RESULTS_DATASET="results"
+    export CG_QUEUE_DATASET="requests"
+    echo "[daily_eval] PUSH_TARGET=prod -> pushing to PRODUCTION (Autonomous-Scientific-Agents)"
+fi
+
 # Source conda (bashrc has a non-interactive guard that skips conda init).
 # Override the conda.sh path via CONDA_SH; falls back to miniforge3 then miniconda3.
 CONDA_SH="${CONDA_SH:-$HOME/miniforge3/etc/profile.d/conda.sh}"
@@ -83,6 +97,13 @@ WORKFLOWS="${WORKFLOWS:-single_agent multi_agent}"
 
 # Output directory for eval results (chemgraph-eval default)
 EVAL_OUTPUT_DIR="${EVAL_OUTPUT_DIR:-$CHEMGRAPH_DIR/eval_results}"
+
+# Ground-truth dataset passed to chemgraph-eval via --dataset. Required on
+# ChemGraph versions with no bundled default (e.g. PR #138/#139). Leave empty
+# to rely on the bundled default (older ChemGraph).
+DATASET="${DATASET:-}"
+DATASET_ARG=""
+[ -n "$DATASET" ] && DATASET_ARG="--dataset $DATASET"
 
 # Number of days to keep archived eval runs (0 = keep forever)
 EVAL_RETENTION_DAYS="${EVAL_RETENTION_DAYS:-0}"
@@ -156,11 +177,13 @@ else
                 # Run in a subshell to capture the real exit code
                 # (including signal-based codes like 139 for SIGSEGV).
                 set +e
+                # shellcheck disable=SC2086  # $DATASET_ARG is intentionally word-split (empty or "--dataset PATH")
                 chemgraph-eval \
                     --models "$MODEL" \
                     --judge-type "$JUDGE_TYPE" \
                     --workflows "$WF" \
                     --output-dir "$EVAL_OUTPUT_DIR" \
+                    $DATASET_ARG \
                     --config "$CHEMGRAPH_CONFIG" \
                     --resume \
                     --report json
@@ -222,6 +245,7 @@ else
                 --judge-type "$JUDGE_TYPE" \
                 --workflows "$WF" \
                 --output-dir "$EVAL_OUTPUT_DIR" \
+                $DATASET_ARG \
                 --config "$CHEMGRAPH_CONFIG" \
                 --resume \
                 --report all; then
