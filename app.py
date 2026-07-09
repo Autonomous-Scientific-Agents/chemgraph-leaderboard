@@ -824,11 +824,12 @@ def build_kpi_strip(leaderboard_df: pd.DataFrame, metrics_df: pd.DataFrame) -> s
     return f'<div class="cg-kpi-strip">{"".join(cards)}</div>'
 
 
-def build_task_difficulty(leaderboard_df: pd.DataFrame):
+def build_task_difficulty(leaderboard_df: pd.DataFrame, metrics_df: pd.DataFrame):
     """Horizontal bar chart of per-task difficulty: the mean accuracy across
-    all models for each of the 12 tasks, sorted hardest-first. This is an
-    aggregate view the per-model table doesn't give — it shows where the whole
-    field struggles. Bars are colored on a red→green scale (red = hard)."""
+    the evaluated models for each of the 12 tasks, sorted hardest-first. Only
+    models actually run in the daily eval (those with token data) are counted —
+    stale / unavailable entries like gpt-4o-latest would otherwise skew the
+    mean. Bars are colored on a red→green scale (red = hard)."""
     fig = go.Figure()
     if leaderboard_df is None or leaderboard_df.empty:
         fig.update_layout(
@@ -838,10 +839,17 @@ def build_task_difficulty(leaderboard_df: pd.DataFrame):
         )
         return fig
 
-    tasks = [t for t in _task_col_names() if t in leaderboard_df.columns]
+    # Count only the actually-evaluated models (those with token data);
+    # fall back to the full set if the metrics join produced nothing.
+    base = _highlights_base(leaderboard_df, metrics_df)
+    run = base[base["tokens_per_query"].notna()]
+    if run.empty:
+        run = base
+
+    tasks = [t for t in _task_col_names() if t in run.columns]
     means = []
     for t in tasks:
-        vals = pd.to_numeric(leaderboard_df[t], errors="coerce").dropna()
+        vals = pd.to_numeric(run[t], errors="coerce").dropna()
         if not vals.empty:
             means.append((t, float(vals.mean()), int(vals.shape[0])))
     if not means:
@@ -898,6 +906,43 @@ def build_task_difficulty(leaderboard_df: pd.DataFrame):
     return fig
 
 
+def _label_positions(xs, ys, x_range, y_range):
+    """Pick a text position (one of 8 around each marker) that keeps labels
+    apart. Plotly has no built-in label de-collision, so this greedily places
+    each label on the side with the most free space relative to other markers
+    and already-placed labels. Returns a list of Plotly ``textposition`` strings
+    aligned with the input order.
+    """
+    import math
+    xr = (x_range[1] - x_range[0]) or 1.0
+    yr = (y_range[1] - y_range[0]) or 1.0
+    nx = [(x - x_range[0]) / xr for x in xs]
+    ny = [(y - y_range[0]) / yr for y in ys]
+    dirs = [
+        ("middle right", 1.0, 0.0), ("middle left", -1.0, 0.0),
+        ("top center", 0.0, 1.0), ("bottom center", 0.0, -1.0),
+        ("top right", 0.75, 0.75), ("bottom right", 0.75, -0.75),
+        ("top left", -0.75, 0.75), ("bottom left", -0.75, -0.75),
+    ]
+    off = 0.06
+    markers = list(zip(nx, ny))
+    placed = []  # chosen label anchor points (normalized)
+    result = [None] * len(xs)
+    for i in sorted(range(len(xs)), key=lambda k: -ny[k]):  # densest (top) first
+        best, best_score = None, -1.0
+        for name, dxu, dyu in dirs:
+            lx, ly = nx[i] + dxu * off, ny[i] + dyu * off
+            dm = min((math.hypot(lx - mx, ly - my)
+                      for j, (mx, my) in enumerate(markers) if j != i), default=1.0)
+            dp = min((math.hypot(lx - px, ly - py) for px, py in placed), default=1.0)
+            score = min(dm, dp)
+            if score > best_score:
+                best_score, best = score, (name, lx, ly)
+        result[i] = best[0]
+        placed.append((best[1], best[2]))
+    return result
+
+
 def build_efficiency_frontier(leaderboard_df: pd.DataFrame, metrics_df: pd.DataFrame):
     """Accuracy vs tokens/query scatter (linear x), colored by family.
 
@@ -921,6 +966,19 @@ def build_efficiency_frontier(leaderboard_df: pd.DataFrame, metrics_df: pd.DataF
         )
         return fig
 
+    # Axis ranges (explicit so the label de-collision normalization matches the
+    # rendered plot). Pad the right a bit more to give edge labels room.
+    _xs = pd.to_numeric(pts["tokens_per_query"], errors="coerce")
+    _xmin, _xmax = float(_xs.min()), float(_xs.max())
+    _span = (_xmax - _xmin) or 1.0
+    x_range = [_xmin - 0.10 * _span, _xmax + 0.16 * _span]
+    y_range = [_ACC_FLOOR, 102]
+
+    # Choose a non-overlapping side for each model's label.
+    _pos = _label_positions(pts["tokens_per_query"].tolist(),
+                            pts[_AVERAGE_COL].tolist(), x_range, y_range)
+    pos_map = dict(zip(pts["full_model"].tolist(), _pos))
+
     palette = {"openai": "#10a37f", "anthropic": "#d97757", "google": "#4285f4"}
     for fam, grp in pts.groupby("family"):
         fig.add_trace(go.Scatter(
@@ -931,7 +989,7 @@ def build_efficiency_frontier(leaderboard_df: pd.DataFrame, metrics_df: pd.DataF
             marker=dict(size=12, color=palette.get(str(fam), "#94a3b8"),
                         line=dict(width=1, color="white")),
             text=grp["display"],
-            textposition="top center",
+            textposition=[pos_map[fm] for fm in grp["full_model"]],
             textfont={"size": 9},
             cliponaxis=False,
             hovertemplate="%{text}<br>%{y:.0f}%  ·  %{x:,.0f} tok/q<extra></extra>",
@@ -964,6 +1022,7 @@ def build_efficiency_frontier(leaderboard_df: pd.DataFrame, metrics_df: pd.DataF
         xaxis=dict(
             title="Average tokens per query",
             tickformat="~s",
+            range=x_range,
             showgrid=True, gridcolor=_GRID_COLOR, gridwidth=1,
             showline=True, linecolor=_AXIS_COLOR, linewidth=1.2, mirror=True,
             ticks="outside", tickcolor=_AXIS_COLOR, zeroline=False,
@@ -1055,11 +1114,11 @@ with demo:
                     )
                     gr.HTML(
                         '<div class="cg-section-label">Task difficulty</div>'
-                        '<div class="cg-section-sub">Mean accuracy across all models — '
-                        'shorter / redder = harder for the field.</div>'
+                        '<div class="cg-section-sub">Mean accuracy across the evaluated '
+                        'models — shorter / redder = harder for the field.</div>'
                     )
                     gr.Plot(
-                        value=build_task_difficulty(df),
+                        value=build_task_difficulty(df, metrics_df),
                         elem_id=f"{base_elem_id}-difficulty",
                         elem_classes="cg-frontier-plot",
                     )
