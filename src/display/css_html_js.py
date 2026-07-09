@@ -285,81 +285,166 @@ custom_css = """
 }
 
 /* ============================================================
-   5. FILTER CONTROLS
-   ============================================================ */
-#filter_type {
-    border: 0;
-    padding-left: 0;
-    padding-top: 0;
-}
+   5. CONTROLS PANELS  (left = Data + Model family, right = Tasks)
+   ============================================================
+   Gradio's side-by-side layout is kept. JS redistributes labels:
+     LEFT  (column-selector)    : Data + Model family
+     RIGHT (model-family filter): Tasks
+*/
 
-#filter_type label {
-    display: flex;
+/* Section header (Data / Model family / Tasks). */
+[data-cg-role="column-selector"] .cg-group-header,
+[data-cg-role="model-family-filter"] .cg-group-header {
+    font-weight: 600;
+    font-size: 0.78rem;
+    color: var(--cg-text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin: 0.55rem 0 0.25rem;
+    padding-bottom: 0.25rem;
+    border-bottom: 1px solid var(--cg-border-light);
+    flex-basis: 100%;
+    width: 100%;
 }
-
-#filter_type label > span {
-    margin-top: var(--spacing-lg);
-    margin-right: 0.5em;
-}
-
-#filter_type label > .wrap {
-    width: 103px;
-}
-
-#filter_type label > .wrap .wrap-inner {
-    padding: 2px;
-}
-
-#filter_type label > .wrap .wrap-inner input {
-    width: 1px;
-}
-
-#filter-columns-type {
-    border: 0;
-    padding: 0.5;
-}
-
-#filter-columns-size {
-    border: 0;
-    padding: 0.5;
-}
-
-#box-filter > .form {
-    border: 0;
-}
-
-/* Column selector — cleaner look */
-.column-selector .wrap {
-    border-radius: var(--cg-radius-sm) !important;
+[data-cg-role="column-selector"] > .cg-group-header-data,
+[data-cg-role="model-family-filter"] > .cg-group-header-tasks {
+    margin-top: 0;
 }
 
 /* ============================================================
    6. TRENDS TAB
    ============================================================ */
-#cg-trends-header {
-    background: var(--cg-surface) !important;
-    border: 1px solid var(--cg-border) !important;
-    border-radius: var(--cg-radius) !important;
-    padding: 1rem 1.5rem !important;
-    box-shadow: var(--cg-shadow-sm) !important;
-    margin-bottom: 0.5rem !important;
-}
-
-#cg-trends-header h3 {
-    color: var(--cg-primary) !important;
-    font-weight: 600 !important;
-    margin-bottom: 0.3rem !important;
-}
-
-#cg-trend-controls {
+/* Trends controls — one bordered card with three zones (Data / View /
+   Actions) separated by thin vertical dividers. */
+.cg-controls-row {
     background: var(--cg-surface) !important;
     border: 1px solid var(--cg-border) !important;
     border-radius: var(--cg-radius-sm) !important;
-    padding: 0.6rem 1rem !important;
+    padding: 0.9rem 1rem !important;
     box-shadow: var(--cg-shadow-sm) !important;
+    gap: 0 !important;
+    align-items: stretch !important;
 }
 
-#cg-trend-chart {
+.cg-controls-row .cg-zone {
+    padding: 0 1rem !important;
+    border-left: 1px solid var(--cg-border-light);
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 0.55rem !important;
+    min-width: 0 !important;
+}
+.cg-controls-row .cg-zone:first-child {
+    border-left: 0;
+    padding-left: 0 !important;
+}
+.cg-controls-row .cg-zone:last-child {
+    padding-right: 0 !important;
+}
+
+/* Zone-internal blocks blend into the card. */
+.cg-controls-row .cg-zone .block,
+.cg-controls-row .cg-zone .form {
+    background: transparent !important;
+    border: 0 !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+}
+
+/* Uniform field-title size for every control in the Trends panel.
+   Gradio uses different wrappers for different control types:
+     - single-value Dropdown (Workflow): <div.container> > <span>
+     - multiselect Dropdown (Models)   : <label.container> > <span>
+     - Textbox (Last updated)          : <label.container> > <span>
+     - Radio items (Past week/...)     : <label> > <span> (these are
+       option labels, not the field title — left alone)
+   The field-title span carries class svelte-g2oxp3 in all three
+   wrapper variants, so target it directly to get one consistent size. */
+.cg-controls-row .cg-zone .container > span.svelte-g2oxp3 {
+    font-size: 0.875rem !important;   /* 14px @ default root */
+    color: var(--cg-text-secondary) !important;
+    font-weight: 500 !important;
+    line-height: 1.2 !important;
+}
+
+/* The radio (Date range) — chip-row instead of stacked. */
+.cg-controls-row .cg-zone-view .wrap {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    gap: 0.35rem !important;
+}
+
+/* From/To date pickers — compact native-date inputs side by side. */
+#cg-trend-date-range,
+#cg-family-date-range {
+    gap: 0.5rem !important;
+}
+.cg-date-input input {
+    font-size: 0.82rem !important;
+    padding: 0.25rem 0.4rem !important;
+}
+
+/* Models multiselect — single-row pill that keeps the frame a few
+   pixels taller than the chips inside so they don't touch the top
+   or bottom border. Scoped to dropdowns that have .token children
+   (the multiselect) so the single-value Workflow dropdown keeps its
+   default compact height. */
+.cg-controls-row .cg-zone-data .gradio-dropdown[data-testid="dropdown"] .wrap:has(.token) {
+    min-height: 51px !important;
+    padding: 0 0.4rem !important;
+    overflow: hidden !important;
+}
+.cg-controls-row .cg-zone-data .wrap:has(.token):hover,
+.cg-controls-row .cg-zone-data .wrap:has(.token):focus-within {
+    overflow-x: auto !important;
+}
+.cg-controls-row .cg-zone-data .wrap:has(.token) .wrap-inner {
+    flex-wrap: nowrap !important;
+    overflow: visible !important;
+    padding: 8px 6px !important;
+    align-items: center !important;
+}
+.cg-controls-row .cg-zone-data .wrap:has(.token) .wrap-inner .token {
+    flex-shrink: 0 !important;
+}
+
+/* Last-view / Hub data caption — muted small text under Refresh. */
+.cg-controls-row .cg-zone-actions .cg-last-updated,
+.cg-controls-row .cg-zone-actions .cg-last-updated p,
+.cg-controls-row .cg-zone-actions .cg-last-updated small {
+    color: var(--cg-text-muted) !important;
+    font-size: 0.7rem !important;
+    line-height: 1.2 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+}
+
+/* Refresh button — compact outline pill using the theme primary. */
+.cg-controls-row .cg-zone-actions button {
+    background: var(--cg-surface) !important;
+    color: var(--cg-primary) !important;
+    border: 1px solid var(--cg-primary) !important;
+    border-radius: var(--cg-radius-sm) !important;
+    padding: 0.3rem 0.85rem !important;
+    font-size: 0.82rem !important;
+    font-weight: 600 !important;
+    line-height: 1.2 !important;
+    min-height: 0 !important;
+    width: auto !important;
+    align-self: flex-start;
+    transition: all 0.15s ease;
+}
+.cg-controls-row .cg-zone-actions button:hover {
+    background: var(--cg-primary) !important;
+    color: #fff !important;
+    box-shadow: var(--cg-shadow-sm) !important;
+}
+.cg-controls-row .cg-zone-actions button:active {
+    transform: translateY(1px);
+}
+
+#cg-trend-chart,
+#cg-family-chart {
     border: 1px solid var(--cg-border) !important;
     border-radius: var(--cg-radius) !important;
     box-shadow: var(--cg-shadow-sm) !important;
@@ -370,20 +455,23 @@ custom_css = """
     background: var(--cg-surface) !important;
 }
 
-#cg-trend-summary-label h3 {
+#cg-trend-summary-label h3,
+#cg-family-summary-label h3 {
     color: var(--cg-primary) !important;
     font-weight: 600 !important;
     font-size: 1.05rem !important;
 }
 
-#cg-trend-summary {
+#cg-trend-summary,
+#cg-family-summary {
     border: 1px solid var(--cg-border) !important;
     border-radius: var(--cg-radius) !important;
     box-shadow: var(--cg-shadow-sm) !important;
     overflow: hidden !important;
 }
 
-#cg-trend-summary table thead th {
+#cg-trend-summary table thead th,
+#cg-family-summary table thead th {
     background: var(--cg-surface-alt) !important;
     font-weight: 600 !important;
     font-size: 0.82rem !important;
@@ -393,11 +481,13 @@ custom_css = """
     border-bottom: 2px solid var(--cg-border) !important;
 }
 
-#cg-trend-summary table tbody tr:nth-child(even) {
+#cg-trend-summary table tbody tr:nth-child(even),
+#cg-family-summary table tbody tr:nth-child(even) {
     background: var(--cg-surface-alt) !important;
 }
 
-#cg-trend-summary table tbody tr:hover td {
+#cg-trend-summary table tbody tr:hover td,
+#cg-family-summary table tbody tr:hover td {
     background: var(--cg-surface-hover) !important;
 }
 
@@ -620,6 +710,111 @@ custom_css = """
 }
 
 /* ============================================================
+   11b. HIGHLIGHTS SUB-TAB (KPI strip + efficiency frontier + task difficulty)
+   ============================================================ */
+
+/* KPI strip — 4 headline cards, pure HTML (paints before any Plotly). */
+.cg-kpi-strip {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    margin: 0.25rem 0 0.9rem;
+}
+.cg-kpi-card {
+    flex: 1 1 180px;
+    min-width: 160px;
+    background: var(--cg-surface);
+    border: 1px solid var(--cg-border);
+    border-radius: var(--cg-radius);
+    box-shadow: var(--cg-shadow-sm);
+    padding: 0.7rem 0.9rem;
+}
+.cg-kpi-label {
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--cg-text-muted);
+}
+.cg-kpi-value {
+    font-size: 1.7rem;
+    font-weight: 700;
+    color: var(--cg-primary);
+    line-height: 1.15;
+    margin: 0.15rem 0;
+}
+.cg-kpi-model {
+    font-size: 0.85rem;
+    color: var(--cg-text-primary);
+    word-break: break-word;
+}
+.cg-kpi-sub {
+    font-size: 0.7rem;
+    color: var(--cg-text-muted);
+    margin-top: 0.1rem;
+}
+.cg-kpi-empty {
+    color: var(--cg-text-muted);
+    padding: 1rem;
+}
+
+/* Frontier + task-difficulty plot framing (both use .cg-frontier-plot). */
+.cg-frontier-plot {
+    border: 1px solid var(--cg-border) !important;
+    border-radius: var(--cg-radius) !important;
+    box-shadow: var(--cg-shadow-sm) !important;
+    background: var(--cg-surface) !important;
+    overflow: hidden !important;
+    padding: 0.5rem !important;
+    width: 100% !important;
+    min-width: 0 !important;
+}
+.cg-frontier-plot .js-plotly-plot,
+.cg-frontier-plot .plot-container {
+    width: 100% !important;
+}
+
+/* Small uppercase caption above each chart. */
+/* Bold dark chart title (黑体). */
+.cg-section-label {
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--cg-text-primary);
+    margin: 1rem 0 0.1rem;
+    line-height: 1.35;
+}
+/* Lighter one-line description under the title. */
+.cg-section-sub {
+    font-size: 0.74rem;
+    font-weight: 400;
+    color: var(--cg-text-muted);
+    margin: 0 0 0.4rem;
+    line-height: 1.4;
+}
+
+/* View all → button, same outline-pill look as the Refresh button. */
+.cg-viewall-btn {
+    background: var(--cg-surface) !important;
+    color: var(--cg-primary) !important;
+    border: 1px solid var(--cg-primary) !important;
+    border-radius: var(--cg-radius-sm) !important;
+    padding: 0.3rem 0.85rem !important;
+    font-size: 0.82rem !important;
+    font-weight: 600 !important;
+    line-height: 1.2 !important;
+    min-height: 0 !important;
+    width: auto !important;
+    align-self: flex-end;
+    margin: 0.3rem 0 0.6rem auto !important;
+    transition: all 0.15s ease;
+}
+.cg-viewall-btn:hover {
+    background: var(--cg-primary) !important;
+    color: #fff !important;
+    box-shadow: var(--cg-shadow-sm) !important;
+}
+
+/* ============================================================
    12. RESPONSIVE ADJUSTMENTS
    ============================================================ */
 @media (max-width: 768px) {
@@ -654,3 +849,272 @@ get_window_url_params = """
         return url_params;
     }
     """
+
+
+# Inline <script> injected via gr.Blocks(head=...). Step 1 only:
+# inside the column-selector CheckboxGroup, sort labels into Data
+# (Average / T / Model / trend cols) and Tasks (the 12 categories)
+# and insert a header before each group. Does NOT touch the parent
+# layout, the model-family filter, ancestor styling, or anything
+# else. Each prior attempt to do those things produced regressions
+# (gray seam, half-width card, leak across tabs).
+group_columns_head = r"""
+<script>
+(function () {
+  const TASK_COLS = new Set([
+    "SMILES Lookup", "Opt (Name)", "Opt (SMILES)",
+    "Vib (Name)", "Vib (SMILES)",
+    "Thermo (Name)", "Thermo (SMILES)",
+    "Dipole (Name)", "Dipole (SMILES)",
+    "Energy (Name)", "Energy (SMILES)",
+    "Reaction Energy",
+  ]);
+
+  const labelOf = el => (el.innerText || el.textContent || "").trim();
+
+  // Find the column-selector CheckboxGroup. Seed on an "Average"
+  // label and walk up until the wrapper contains task labels but
+  // not unrelated UI labels (Search, org chips).
+  function findColumnSelectorContainers() {
+    const seeds = Array.from(document.querySelectorAll("label"))
+      .filter(l => labelOf(l).startsWith("Average"));
+    const out = new Set();
+    for (const seed of seeds) {
+      let cur = seed.parentElement;
+      for (let i = 0; i < 4 && cur; i++) {
+        const texts = Array.from(cur.children)
+          .filter(c => c.tagName === "LABEL").map(labelOf);
+        const hasTask = texts.some(t => TASK_COLS.has(t));
+        const polluted = texts.includes("Search")
+          || texts.includes("anthropic") || texts.includes("openai");
+        if (hasTask && !polluted) { out.add(cur); break; }
+        cur = cur.parentElement;
+      }
+    }
+    return Array.from(out);
+  }
+
+  // Find the model-family filter: a small CheckboxGroup whose direct
+  // <label> children are org names.
+  function findModelFamilyContainers() {
+    const seeds = Array.from(document.querySelectorAll("label"))
+      .filter(l => { const t = labelOf(l); return t === "anthropic" || t === "openai"; });
+    const out = new Set();
+    for (const seed of seeds) {
+      const parent = seed.parentElement;
+      if (!parent) continue;
+      const texts = Array.from(parent.children)
+        .filter(c => c.tagName === "LABEL").map(labelOf);
+      if (texts.length === 0 || texts.length > 12) continue;
+      if (texts.some(t => TASK_COLS.has(t))) continue;
+      out.add(parent);
+    }
+    return Array.from(out);
+  }
+
+  // Hide a Gradio-rendered section label ("Columns to display" /
+  // "Model family") sitting just above the given content container.
+  function hideSiblingSectionLabel(container, needle) {
+    let cur = container.parentElement;
+    for (let i = 0; i < 5 && cur; i++) {
+      const candidates = cur.querySelectorAll(
+        ":scope > label, :scope > span, :scope > .label");
+      for (const el of candidates) {
+        if (labelOf(el).toLowerCase().includes(needle) && !el.dataset.cgHidden) {
+          el.style.display = "none";
+          el.dataset.cgHidden = "1";
+          return;
+        }
+      }
+      cur = cur.parentElement;
+    }
+  }
+
+  // Pair each column-selector with the model-family filter whose
+  // nearest common ancestor is shortest — they live in the same tab.
+  function pairColAndMF(cols, fils) {
+    const pairs = [];
+    cols.forEach(c => {
+      let best = null, bestDepth = Infinity;
+      fils.forEach(f => {
+        let cur = c.parentElement, d = 0;
+        while (cur && d < 12) {
+          if (cur.contains(f)) {
+            if (d < bestDepth) { best = f; bestDepth = d; }
+            break;
+          }
+          cur = cur.parentElement; d++;
+        }
+      });
+      pairs.push([c, best]);
+    });
+    return pairs;
+  }
+
+  // Lay out a panel: optionally hide its Gradio section label, then
+  // sort its direct-child labels into Data + Model-family groups
+  // (left) or Tasks-only (right) with sticky group headers.
+  function reshape(colSel, mfFilter) {
+    colSel.dataset.cgRole = "column-selector";
+    if (mfFilter) mfFilter.dataset.cgRole = "model-family-filter";
+
+    hideSiblingSectionLabel(colSel, "columns to display");
+    if (mfFilter) hideSiblingSectionLabel(mfFilter, "model family");
+
+    if (colSel.dataset.cgGrouped === "1") return;
+
+    // 1. Snapshot the column-selector's current labels and split.
+    const colLabels = Array.from(colSel.children).filter(c => c.tagName === "LABEL");
+    const dataLabels = colLabels.filter(l => !TASK_COLS.has(labelOf(l)));
+    const taskLabels = colLabels.filter(l => TASK_COLS.has(labelOf(l)));
+
+    // 2. Remove any prior headers we inserted in either panel.
+    colSel.querySelectorAll(":scope > .cg-group-header").forEach(h => h.remove());
+    if (mfFilter) {
+      mfFilter.querySelectorAll(":scope > .cg-group-header").forEach(h => h.remove());
+    }
+
+    // 3. LEFT panel (column-selector): Data section, then Model family
+    //    section. We move the MF chips here AFTER Data; the model-
+    //    family panel on the right becomes the home for Tasks.
+    if (dataLabels.length) {
+      const h = document.createElement("div");
+      h.className = "cg-group-header cg-group-header-data";
+      h.textContent = "Data";
+      colSel.appendChild(h);
+      dataLabels.forEach(l => colSel.appendChild(l));
+    }
+
+    if (mfFilter) {
+      const mfLabels = Array.from(mfFilter.children).filter(c => c.tagName === "LABEL");
+      if (mfLabels.length) {
+        const h = document.createElement("div");
+        h.className = "cg-group-header cg-group-header-family";
+        h.textContent = "Model family";
+        colSel.appendChild(h);
+        mfLabels.forEach(l => colSel.appendChild(l));
+      }
+
+      // 4. RIGHT panel (was model-family): now hosts Tasks.
+      if (taskLabels.length) {
+        const h = document.createElement("div");
+        h.className = "cg-group-header cg-group-header-tasks";
+        h.textContent = "Tasks";
+        mfFilter.appendChild(h);
+        taskLabels.forEach(l => mfFilter.appendChild(l));
+      }
+    } else if (taskLabels.length) {
+      // No right panel found — keep Tasks in the left panel under a
+      // header so they aren't lost.
+      const h = document.createElement("div");
+      h.className = "cg-group-header cg-group-header-tasks";
+      h.textContent = "Tasks";
+      colSel.appendChild(h);
+      taskLabels.forEach(l => colSel.appendChild(l));
+    }
+
+    colSel.dataset.cgGrouped = "1";
+  }
+
+  // Turn the From/To textboxes into native date pickers, constrained
+  // to the dataset's [min, max] eval_date range (carried in a hidden
+  // span). Gradio doesn't ship a DatePicker; mutating the input's
+  // type is enough because the value still flows through the textbox
+  // 'input' event, so Python-side change handlers fire normally.
+  function upgradeDateInputs() {
+    const pairs = [
+      { ids: ["cg-trend-from", "cg-trend-to"], boundsId: "cg-trend-date-bounds" },
+      { ids: ["cg-fam-from",   "cg-fam-to"  ], boundsId: "cg-fam-date-bounds"   },
+    ];
+    pairs.forEach(({ ids, boundsId }) => {
+      const bounds = document.getElementById(boundsId);
+      const minDate = bounds ? bounds.dataset.min : "";
+      const maxDate = bounds ? bounds.dataset.max : "";
+      ids.forEach(id => {
+        const wrap = document.getElementById(id);
+        if (!wrap || wrap.dataset.cgDated === "1") return;
+        const input = wrap.querySelector("input, textarea");
+        if (!input) return;
+        let target = input;
+        if (input.tagName === "TEXTAREA") {
+          target = document.createElement("input");
+          target.value = input.value;
+          for (const a of input.attributes) {
+            if (a.name === "rows") continue;
+            target.setAttribute(a.name, a.value);
+          }
+          input.replaceWith(target);
+        }
+        target.type = "date";
+        if (minDate) target.min = minDate;
+        if (maxDate) target.max = maxDate;
+        wrap.dataset.cgDated = "1";
+      });
+    });
+  }
+
+  // Gradio 5.50's PlotlyPlot.svelte does NOT trigger Plotly.Plots.resize
+  // on the display:none → display:flex transition that happens when
+  // the user switches into Multi-Agent or Trends for the first time.
+  // ResizeObserver only fires on real box-size changes, and the parent
+  // already had its layout width before the tab was shown.
+  //
+  // Without a nudge, the chart stays at its initial (700px fallback)
+  // width forever. Earlier attempts to fix this combined a resize
+  // nudge with a visibility:hidden + reveal-poll, which introduced a
+  // "blank → narrow → correct" three-step flash. Lesson: do the
+  // resize, do NOT hide the host. The result is a brief sub-perceptual
+  // narrow→correct paint (Gradio PR #8740 / Plotly #2769) which is
+  // less bad than a permanently-narrow chart.
+  function nudgeVisiblePlotlyCharts() {
+    if (!window.Plotly) return;
+    document.querySelectorAll('.js-plotly-plot').forEach(chart => {
+      // offsetParent is null for display:none — skip; resize would do nothing.
+      if (!chart.offsetParent) return;
+      try { window.Plotly.Plots.resize(chart); } catch (e) {}
+    });
+  }
+
+  function wireTabClickResize() {
+    if (window.__cgTabHooked) return;
+    window.__cgTabHooked = true;
+    document.addEventListener('click', e => {
+      if (!e.target.closest('[role="tab"], .tab-buttons button')) return;
+      // Resize twice: once after Gradio flips display, once after the
+      // browser has actually laid out the newly-visible plot's parent.
+      requestAnimationFrame(() => requestAnimationFrame(nudgeVisiblePlotlyCharts));
+      setTimeout(nudgeVisiblePlotlyCharts, 200);
+    }, true);
+  }
+
+  function pass() {
+    const cols = findColumnSelectorContainers();
+    const fils = findModelFamilyContainers();
+    pairColAndMF(cols, fils).forEach(([c, f]) => reshape(c, f));
+    upgradeDateInputs();
+    wireTabClickResize();
+  }
+
+  let pending = false;
+  function schedule() {
+    if (pending) return;
+    pending = true;
+    setTimeout(() => {
+      pending = false;
+      try { pass(); } catch (e) { console.warn("[cg-group]", e); }
+    }, 100);
+  }
+
+  function start() {
+    pass();
+    new MutationObserver(schedule).observe(document.body, { childList: true, subtree: true });
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", start);
+  } else {
+    start();
+  }
+})();
+</script>
+"""

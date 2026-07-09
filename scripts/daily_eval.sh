@@ -4,7 +4,7 @@
 # This script is intended to be run via cron. Example crontab entry:
 #
 #   MAILTO=example@anl.gov
-#   0 2 * * * /home/tdpham2/chemgraph-leaderboard/scripts/daily_eval.sh >> /home/tdpham2/chemgraph-leaderboard/eval.log 2>&1
+#   0 2 * * * /home/zhye/leaderboard_dev/scripts/daily_eval.sh >> /home/zhye/leaderboard_dev/eval.log 2>&1
 #
 # Modes:
 #   Full pipeline (default):
@@ -17,8 +17,8 @@
 #     SKIP_EVAL=true ./scripts/daily_eval.sh
 #
 # Prerequisites:
-#   - conda environment at /home/tdpham2/ChemGraph/env/cg_mar31_env
-#   - HF_TOKEN environment variable set (via ~/.bashrc)
+#   - conda environment 'chemgraph' with the chemgraph-eval CLI installed
+#   - HF_TOKEN environment variable set (via scripts/dev_env.sh or ~/.bashrc)
 #   - config.toml in CHEMGRAPH_DIR with API keys for LLM providers
 #
 # Configuration — edit these variables or override via environment:
@@ -26,25 +26,38 @@
 set -euo pipefail
 
 # ---------- Environment Setup ----------
-# Source conda directly (bashrc has a non-interactive guard that skips conda init).
+# Source per-machine dev/prod overrides if present. This (untracked) file sets
+# CG_OWNER / CG_*_DATASET / HF_TOKEN for dev-vs-prod routing, plus machine
+# paths: CHEMGRAPH_DIR, CG_CONDA_ENV, CONDA_SH, ARGO_USER. Without it, the
+# hardcoded production defaults below apply.
+_SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 # shellcheck disable=SC1091
-source "$HOME/miniconda3/etc/profile.d/conda.sh"
-conda activate /home/tdpham2/ChemGraph/env/cg_mar31_env
+[ -f "$_SCRIPT_DIR/dev_env.sh" ] && source "$_SCRIPT_DIR/dev_env.sh"
 
-# Source bashrc for HF_TOKEN (force non-interactive bashrc to load).
+# Source conda (bashrc has a non-interactive guard that skips conda init).
+# Override the conda.sh path via CONDA_SH; falls back to miniforge3 then miniconda3.
+CONDA_SH="${CONDA_SH:-$HOME/miniforge3/etc/profile.d/conda.sh}"
+[ -f "$CONDA_SH" ] || CONDA_SH="$HOME/miniconda3/etc/profile.d/conda.sh"
+# shellcheck disable=SC1091
+source "$CONDA_SH"
+conda activate "${CG_CONDA_ENV:-chemgraph}"
+
+# Source bashrc for HF_TOKEN only if dev_env.sh didn't already provide it.
 # shellcheck disable=SC1090
-set +u  # bashrc may reference unset variables
-source "$HOME/.bashrc" 2>/dev/null || true
-set -u
+if [ -z "${HF_TOKEN:-}" ]; then
+    set +u  # bashrc may reference unset variables
+    source "$HOME/.bashrc" 2>/dev/null || true
+    set -u
+fi
 
-export ARGO_USER="${ARGO_USER:-tpham}"
+export ARGO_USER="${ARGO_USER:-zhye}"
 
 # ---------- Configuration ----------
 # Path to the chemgraph-leaderboard repo
 LEADERBOARD_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 
 # Path to the ChemGraph repo (where config.toml lives)
-CHEMGRAPH_DIR="${CHEMGRAPH_DIR:-/home/tdpham2/ChemGraph}"
+CHEMGRAPH_DIR="${CHEMGRAPH_DIR:-/home/zhye/ChemGraph}"
 
 # Skip the chemgraph eval step and only convert + push existing results.
 SKIP_EVAL="${SKIP_EVAL:-false}"
@@ -89,6 +102,9 @@ REQUESTS_OUTDIR="$LEADERBOARD_DIR/hub_requests"
 # Model map
 MODEL_MAP="$LEADERBOARD_DIR/dataset/model_map.json"
 
+# Local-only metrics archive (token usage + time breakdown). NEVER pushed to HF.
+METRICS_DIR="${METRICS_DIR:-$LEADERBOARD_DIR/eval_metrics}"
+
 # ---------- End Configuration ----------
 
 echo "========================================"
@@ -104,7 +120,7 @@ ALL_FAILED_MODELS=()
 # Step 1: Run ChemGraph evaluation (unless SKIP_EVAL=true)
 if [ "$SKIP_EVAL" = "true" ]; then
     echo ""
-    echo "[Step 1/4] Skipping ChemGraph evaluation (SKIP_EVAL=true)"
+    echo "[Step 1/5] Skipping ChemGraph evaluation (SKIP_EVAL=true)"
     if [ -n "$BENCHMARK_FILE" ]; then
         echo "  Benchmark file: $BENCHMARK_FILE"
     else
@@ -120,7 +136,7 @@ else
     # in one model cannot affect the others.
     for WF in $WORKFLOWS; do
         echo ""
-        echo "[Step 1/4] Running ChemGraph evaluation (workflow: $WF)..."
+        echo "[Step 1/5] Running ChemGraph evaluation (workflow: $WF)..."
         echo "  Models:      $MODELS"
         echo "  Judge type:  $JUDGE_TYPE"
         echo "  Workflow:    $WF"
@@ -227,7 +243,7 @@ fi
 
 # Step 2: Archive eval results (move eval_results/ -> eval_YYYY-MM-DD/)
 echo ""
-echo "[Step 2/4] Archiving eval results..."
+echo "[Step 2/5] Archiving eval results..."
 ARCHIVE_NAME="eval_$(date -u -d 'yesterday' '+%Y-%m-%d')"
 ARCHIVE_DIR="$CHEMGRAPH_DIR/$ARCHIVE_NAME"
 
@@ -248,9 +264,29 @@ else
     echo "  Skipping archive (SKIP_EVAL=true or output dir not found)."
 fi
 
-# Step 3: Transform results and push to HF Hub
+# Step 3: Extract local token/time metrics. LOCAL ONLY — never pushed to HF.
+# Reads the instrumented benchmark_*.json and writes clean metrics_<date>.json
+# + metrics_<date>.csv to METRICS_DIR (outside the eval archive, so it is not
+# removed by the Step 5 retention cleanup).
 echo ""
-echo "[Step 3/4] Transforming results and pushing to HF Hub..."
+echo "[Step 3/5] Extracting local token/time metrics (not pushed to HF)..."
+METRICS_CMD=(
+    python "$LEADERBOARD_DIR/scripts/extract_eval_metrics.py"
+    --eval-dir "$EVAL_OUTPUT_DIR"
+    --out-dir "$METRICS_DIR"
+)
+if [ -n "$BENCHMARK_FILE" ]; then
+    METRICS_CMD+=(--benchmark-file "$BENCHMARK_FILE")
+fi
+if "${METRICS_CMD[@]}"; then
+    echo "  Metrics written to $METRICS_DIR"
+else
+    echo "  WARNING: metrics extraction failed (non-fatal; continuing)."
+fi
+
+# Step 4: Transform results and push to HF Hub
+echo ""
+echo "[Step 4/5] Transforming results and pushing to HF Hub..."
 
 # Clean staging directories so only this run's files are uploaded.
 # The ETL uses date-indexed filenames (results_YYYY-MM-DD.json) and
@@ -288,9 +324,9 @@ for WF in $WORKFLOWS; do
     fi
 done
 
-# Step 4: Clean up old eval runs
+# Step 5: Clean up old eval runs
 echo ""
-echo "[Step 4/4] Cleaning up old eval runs..."
+echo "[Step 5/5] Cleaning up old eval runs..."
 if [ "$EVAL_RETENTION_DAYS" -gt 0 ]; then
     OLD_DIRS=$(find "$CHEMGRAPH_DIR" -maxdepth 1 -name "eval_20*" -type d -mtime +"$EVAL_RETENTION_DAYS" 2>/dev/null || true)
     if [ -n "$OLD_DIRS" ]; then

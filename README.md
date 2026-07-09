@@ -8,7 +8,7 @@ app_file: app.py
 pinned: true
 license: apache-2.0
 short_description: 'Agentic AI benchmark for computational chemistry '
-sdk_version: 5.43.1
+sdk_version: 5.50.0
 tags:
 - leaderboard
 ---

@@ -149,19 +149,10 @@ class EvalResult:
                 weighted_sum += score * task.value.num_questions
         average = weighted_sum / total_questions if total_questions > 0 else 0
         data_dict = {
-            "eval_name": self.eval_name,  # not a column, just a save name,
-            AutoEvalColumn.precision.name: self.precision.value.name,
-            AutoEvalColumn.model_type.name: self.model_type.value.name,
-            AutoEvalColumn.model_type_symbol.name: self.model_type.value.symbol,
-            AutoEvalColumn.weight_type.name: self.weight_type.value.name,
-            AutoEvalColumn.architecture.name: self.architecture,
+            "eval_name": self.eval_name,  # not a column, just a save name
             AutoEvalColumn.model.name: make_clickable_model(self.full_model),
-            AutoEvalColumn.revision.name: self.revision,
+            AutoEvalColumn.model_family.name: self.org or "unknown",
             AutoEvalColumn.average.name: average,
-            AutoEvalColumn.license.name: self.license,
-            AutoEvalColumn.likes.name: self.likes,
-            AutoEvalColumn.params.name: self.num_params,
-            AutoEvalColumn.still_on_hub.name: self.still_on_hub,
         }
 
         for task in Tasks:
