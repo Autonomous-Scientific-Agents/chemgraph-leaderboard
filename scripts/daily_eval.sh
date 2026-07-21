@@ -64,7 +64,7 @@ if [ -z "${HF_TOKEN:-}" ]; then
     set -u
 fi
 
-export ARGO_USER="${ARGO_USER:-zhye}"
+export ARGO_USER="${ARGO_USER:-<ARGO_USERNAME>}"
 
 # ---------- Configuration ----------
 # Path to the chemgraph-leaderboard repo
