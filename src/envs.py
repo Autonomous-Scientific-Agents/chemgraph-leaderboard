@@ -15,11 +15,14 @@ OWNER = os.environ.get("CG_OWNER", "Autonomous-Scientific-Agents")
 SPACE_NAME = os.environ.get("CG_SPACE_NAME", "chemgraph-leaderboard")
 QUEUE_DATASET = os.environ.get("CG_QUEUE_DATASET", "requests")
 RESULTS_DATASET = os.environ.get("CG_RESULTS_DATASET", "results")
+# Community-contributed eval tasks (harbor-style task bundles) live here.
+TASKS_DATASET = os.environ.get("CG_TASKS_DATASET", "community-tasks")
 # ----------------------------------
 
 REPO_ID = f"{OWNER}/{SPACE_NAME}"
 QUEUE_REPO = f"{OWNER}/{QUEUE_DATASET}"
 RESULTS_REPO = f"{OWNER}/{RESULTS_DATASET}"
+TASKS_REPO = f"{OWNER}/{TASKS_DATASET}"
 
 # If you setup a cache later, just change HF_HOME
 CACHE_PATH = os.getenv("HF_HOME", ".")
@@ -29,6 +32,8 @@ EVAL_REQUESTS_PATH = os.path.join(CACHE_PATH, "eval-queue")
 EVAL_RESULTS_PATH = os.path.join(CACHE_PATH, "eval-results")
 EVAL_REQUESTS_PATH_BACKEND = os.path.join(CACHE_PATH, "eval-queue-bk")
 EVAL_RESULTS_PATH_BACKEND = os.path.join(CACHE_PATH, "eval-results-bk")
+# Local staging dir where a submitted task bundle is assembled before upload.
+TASK_SUBMISSIONS_PATH = os.path.join(CACHE_PATH, "task-submissions")
 
 # Supported workflow types
 WORKFLOWS = ["single_agent", "multi_agent"]

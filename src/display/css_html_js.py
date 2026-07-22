@@ -784,7 +784,41 @@ custom_css = """
     width: 100% !important;
 }
 
-/* Small uppercase caption above each chart. */
+/* Contribute-a-Task sections: a clean white bordered card (a Column, not a
+   gr.Group — so fields keep their own borders and stay clearly separated,
+   with no gray gap-fill). */
+.cg-form-group {
+    background: var(--cg-surface) !important;
+    border: 1px solid var(--cg-border) !important;
+    border-radius: var(--cg-radius) !important;
+    padding: 1rem 1.1rem !important;
+    margin-bottom: 0.8rem !important;
+}
+/* Kill Gradio's merged-input ".form" wrapper (gray fill + extra border) inside
+   our cards, so adjacent textboxes render as clean standalone boxes. */
+.cg-form-group .form {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    gap: 0.6rem !important;
+    overflow: visible !important;
+}
+
+/* Gradio textareas default to overflow-y:scroll → an always-on scrollbar that
+   shows as a gray strip at the right edge of single-line boxes (esp. on macOS
+   "always show scrollbars"). Only show it when content actually overflows. */
+.cg-form-group textarea {
+    overflow-y: auto !important;
+}
+
+/* Section title — plain div inside a transparent gr.HTML; just style the text. */
+.cg-form-section-title {
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: var(--cg-text-primary);
+    margin: 0.1rem 0 0.5rem;
+}
+
 /* Bold dark chart title (黑体). */
 .cg-section-label {
     font-size: 1rem;
