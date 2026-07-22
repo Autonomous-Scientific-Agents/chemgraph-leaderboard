@@ -244,24 +244,30 @@ def add_new_task(
     }
     (root / "submission.json").write_text(json.dumps(submission, indent=2) + "\n")
 
-    # --- upload the whole bundle ---
+    # --- open a pull request with the whole bundle (not a direct commit to
+    #     main) so a maintainer reviews it before it's added. ---
     try:
-        API.upload_folder(
+        commit_info = API.upload_folder(
             folder_path=str(root),
             path_in_repo=prefix,
             repo_id=TASKS_REPO,
             repo_type="dataset",
             commit_message=f"Add community task: {slug}",
+            create_pr=True,
         )
     except Exception as exc:
         shutil.rmtree(root, ignore_errors=True)
-        return styled_error(f"Upload to {TASKS_REPO} failed: {exc}")
+        return styled_error(f"Submitting a pull request to {TASKS_REPO} failed: {exc}")
     shutil.rmtree(root, ignore_errors=True)
 
+    # NB: styled_message wraps this in a raw <p>, so use HTML (not markdown).
+    pr_url = getattr(commit_info, "pr_url", None)
     msg = (
-        f"✅ Task **{slug}** submitted to `{TASKS_REPO}` under `{prefix}` "
-        "(status **PENDING**). It will be reviewed before it runs on the backend."
+        f"✅ Task <b>{slug}</b> submitted as a pull request to {TASKS_REPO} — "
+        "it won't be added until a maintainer reviews and merges it."
     )
+    if pr_url:
+        msg += f'<br><br>🔗 <a href="{pr_url}" target="_blank">View your pull request</a>'
     if warnings:
-        msg += "\n\n⚠️ Reviewer notes:\n" + "\n".join(f"- {w}" for w in warnings)
+        msg += "<br><br>⚠️ Reviewer notes:<br>" + "<br>".join(f"• {w}" for w in warnings)
     return styled_message(msg)
