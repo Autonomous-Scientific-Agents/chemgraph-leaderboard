@@ -787,21 +787,29 @@ custom_css = """
 /* Contribute-a-Task sections: a clean white bordered card (a Column, not a
    gr.Group — so fields keep their own borders and stay clearly separated,
    with no gray gap-fill). */
+/* ONE consistent gap everywhere inside the form cards: the column, the merged
+   ".form" wrapper, and explicit rows all use the same value so the vertical
+   (and in-row) rhythm is uniform regardless of component type. */
 .cg-form-group {
     background: var(--cg-surface) !important;
     border: 1px solid var(--cg-border) !important;
     border-radius: var(--cg-radius) !important;
-    padding: 1rem 1.1rem !important;
-    margin-bottom: 0.8rem !important;
+    padding: 0.8rem 1rem !important;
+    margin-bottom: 0.5rem !important;
+    gap: 0.3rem !important;
 }
-/* Kill Gradio's merged-input ".form" wrapper (gray fill + extra border) inside
-   our cards, so adjacent textboxes render as clean standalone boxes. */
+/* Kill Gradio's merged-input ".form" wrapper (gray fill + extra border) and
+   align its gap to the column's. */
 .cg-form-group .form {
     background: transparent !important;
     border: none !important;
     box-shadow: none !important;
-    gap: 0.6rem !important;
+    gap: 0.3rem !important;
     overflow: visible !important;
+}
+/* Same gap for explicit rows (e.g. name / email / org). */
+.cg-form-group .row {
+    gap: 0.3rem !important;
 }
 
 /* Gradio textareas default to overflow-y:scroll → an always-on scrollbar that
@@ -811,13 +819,69 @@ custom_css = """
     overflow-y: auto !important;
 }
 
-/* Section title — plain div inside a transparent gr.HTML; just style the text. */
+/* Section title — sits OUTSIDE/above each form card, in brand blue. */
 .cg-form-section-title {
     font-size: 1.05rem;
     font-weight: 700;
-    color: var(--cg-text-primary);
-    margin: 0.1rem 0 0.5rem;
+    color: var(--cg-primary);
+    margin: 0.8rem 0 0.4rem;
 }
+
+/* Opening description — boxed (a .cg-form-group card) with a blue heading. */
+.cg-contribute-intro h1,
+.cg-contribute-intro h2 {
+    color: var(--cg-primary) !important;
+    margin-top: 0 !important;
+}
+
+/* "Tools used" — render the CheckboxGroup options as clickable colored pills.
+   Selected state is only input:checked (label class unchanged) → use :has(). */
+.cg-tool-tags {
+    background: var(--cg-surface) !important;
+    border: 1px solid var(--cg-border) !important;
+    border-radius: var(--cg-radius-sm) !important;
+    box-shadow: none !important;
+    padding: 0.6rem 0.8rem !important;
+}
+.cg-tool-tags label {
+    display: inline-flex !important;
+    align-items: center;
+    border: 1.5px solid var(--tag, #94a3b8) !important;
+    color: var(--tag, #475569) !important;
+    background: transparent !important;
+    border-radius: 999px !important;
+    padding: 0.24rem 0.75rem !important;
+    margin: 0.2rem 0.4rem 0.2rem 0 !important;
+    font-size: 0.82rem;
+    font-weight: 600;
+    cursor: pointer !important;
+    transition: all 0.12s ease;
+}
+.cg-tool-tags label input[type="checkbox"] {
+    display: none !important;
+}
+.cg-tool-tags label span {
+    margin: 0 !important;
+}
+.cg-tool-tags label:hover {
+    filter: brightness(0.97);
+}
+.cg-tool-tags label:has(input:checked) {
+    background: var(--tag, #2563eb) !important;
+    border-color: var(--tag, #2563eb) !important;
+    color: #ffffff !important;
+}
+/* per-tag color, by position
+   (RDKit · MACE · TBLite · NWChem · ORCA · UMA · AIMNet2 · gRASPA · XANES) */
+.cg-tool-tags label:nth-of-type(1) { --tag: #2563eb; }  /* RDKit  — blue   */
+.cg-tool-tags label:nth-of-type(2) { --tag: #0d9488; }  /* MACE   — teal   */
+.cg-tool-tags label:nth-of-type(3) { --tag: #d97706; }  /* TBLite — amber  */
+.cg-tool-tags label:nth-of-type(4) { --tag: #16a34a; }  /* NWChem — green  */
+.cg-tool-tags label:nth-of-type(5) { --tag: #7c3aed; }  /* ORCA   — violet */
+.cg-tool-tags label:nth-of-type(6) { --tag: #db2777; }  /* UMA    — pink   */
+.cg-tool-tags label:nth-of-type(7) { --tag: #0891b2; }  /* AIMNet2— cyan   */
+.cg-tool-tags label:nth-of-type(8) { --tag: #dc2626; }  /* gRASPA — red    */
+.cg-tool-tags label:nth-of-type(9) { --tag: #65a30d; }  /* XANES  — lime   */
 
 /* Bold dark chart title (黑体). */
 .cg-section-label {

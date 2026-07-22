@@ -1523,18 +1523,20 @@ with demo:
             )
 
         with gr.TabItem("🧪 Contribute a Task", elem_id="llm-benchmark-tab-table", id=5):
-            gr.Markdown(
-                "## Contribute an evaluation task\n"
-                "Add your own chemistry eval task to the benchmark. You only provide the "
-                "**query**, an **oracle** that proves it's solvable (solve.sh + solve.py), "
-                "and the **ground truth**. We assemble a complete "
-                f"[harbor compatible task](https://huggingface.co/datasets/{TASKS_REPO}) "
-                "and store it for review — nothing runs until an admin approves it.",
-                elem_classes="markdown-text",
-            )
+            with gr.Column(elem_classes="cg-form-group cg-contribute-intro-box"):
+                gr.Markdown(
+                    "## Contribute an evaluation task\n"
+                    "Add your own chemistry eval task to the benchmark. You only provide the "
+                    "**query**, an **oracle** that proves it's solvable (solve.sh + solve.py), "
+                    "and the **ground truth**. We assemble a complete "
+                    f"[harbor compatible task](https://huggingface.co/datasets/{TASKS_REPO}) "
+                    "and store it for review — nothing runs until an admin approves it.",
+                    elem_classes="cg-contribute-intro",
+                )
+
             # ---- Part 1: basic information ----
+            gr.HTML("<div class='cg-form-section-title'>1 · Basic information</div>")
             with gr.Column(elem_classes="cg-form-group"):
-                gr.HTML("<div class='cg-form-section-title'>1 · Basic information</div>")
                 with gr.Row():
                     task_author = gr.Textbox(label="Your name")
                     task_email = gr.Textbox(label="Email / contact")
@@ -1558,8 +1560,8 @@ with demo:
                         task_subfield = gr.Textbox(label="Subfield", value="computational-chemistry")
 
             # ---- Part 2: task composition ----
+            gr.HTML("<div class='cg-form-section-title'>2 · Task composition</div>")
             with gr.Column(elem_classes="cg-form-group"):
-                gr.HTML("<div class='cg-form-section-title'>2 · Task composition</div>")
                 task_query = gr.Textbox(
                     label="Query", lines=3,
                     value="Provide the SMILES string corresponding to this molecule: sulfur dioxide",
@@ -1604,11 +1606,12 @@ with demo:
                                 'python3 "$DIR/solve.py"\n'
                             ),
                         )
-                        task_tools = gr.Dropdown(
-                            choices=["RDKit", "PubChemPy", "ASE", "MACE-MP", "TBLite", "NWChem"],
-                            multiselect=True,
+                        task_tools = gr.CheckboxGroup(
+                            choices=["RDKit", "MACE", "TBLite", "NWChem", "ORCA",
+                                     "UMA", "AIMNet2", "gRASPA", "XANES"],
                             label="Tools used",
-                            info="Select the compute tools your task relies on.",
+                            info="Click to select the compute tools your task relies on.",
+                            elem_classes="cg-tool-tags",
                         )
 
             submit_task_button = gr.Button("Submit Task", elem_id="cg-submit-btn")
