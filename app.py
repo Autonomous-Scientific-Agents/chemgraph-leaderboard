@@ -684,11 +684,25 @@ def _task_col_names() -> list[str]:
 
 _AVERAGE_COL = "Average ⬆️"
 _HARDEST_TASK = "Reaction Energy"  # weight-10, historically lowest-scoring
-_ACC_FLOOR = 60  # frontier: don't plot models below this overall accuracy
 
 # Highlighted picks: shared between the KPI cards and the frontier markers so
 # both point at the same models. Emoji marks each on the scatter.
 _HIGHLIGHT_EMOJI = {"best": "👑", "eff": "⚡", "cheap": "💰"}
+
+# Open-weight vs proprietary is not stored in the data schema; classify by known
+# open model series so the frontier can mark them with a distinct marker shape.
+# (openai/gpt-oss-* is open even though its org "openai" also has closed models.)
+_OPEN_SOURCE_PATTERNS = ("gemma", "llama", "nemotron", "gpt-oss",
+                         "mistral", "mixtral", "qwen", "deepseek")
+_MARKER_CLOSED = "circle"   # proprietary
+_MARKER_OPEN = "diamond"    # open-weight
+
+
+def _is_open_source(full_model: str) -> bool:
+    """True for known open-weight models (matched by series name, case-insensitive)."""
+    s = str(full_model).lower()
+    return any(p in s for p in _OPEN_SOURCE_PATTERNS)
+
 
 # Shared chart chrome (slate, semi-transparent so it reads on both themes).
 _GRID_COLOR = "rgba(148,163,184,0.28)"
@@ -943,20 +957,19 @@ def _label_positions(xs, ys, x_range, y_range):
     return result
 
 
-def build_efficiency_frontier(leaderboard_df: pd.DataFrame, metrics_df: pd.DataFrame):
+def build_efficiency_frontier(leaderboard_df: pd.DataFrame, metrics_df: pd.DataFrame,
+                              workflow_label: str = ""):
     """Accuracy vs tokens/query scatter (linear x), colored by family.
 
     The token spread here is < 1 order of magnitude (~3x), so a linear x-axis
-    is clearer than log. Only models at/above _ACC_FLOOR accuracy are plotted —
-    below that the run is effectively broken and just clutters the view. Models
-    without token data can't be placed on the cost axis and are skipped.
+    is clearer than log. All evaluated models are plotted (no accuracy floor);
+    the y-axis auto-fits to the data. Models without token data can't be placed
+    on the cost axis and are skipped.
     """
     base_full = _highlights_base(leaderboard_df, metrics_df)
     fig = go.Figure()
     base = base_full
-    if not base.empty:
-        acc = pd.to_numeric(base[_AVERAGE_COL], errors="coerce")
-        base = base[acc >= _ACC_FLOOR]
+    # No accuracy floor: show all evaluated models (incl. low-accuracy open-weight).
     pts = base.dropna(subset=["tokens_per_query"]) if not base.empty else base
     if pts is None or pts.empty:
         fig.update_layout(
@@ -972,21 +985,31 @@ def build_efficiency_frontier(leaderboard_df: pd.DataFrame, metrics_df: pd.DataF
     _xmin, _xmax = float(_xs.min()), float(_xs.max())
     _span = (_xmax - _xmin) or 1.0
     x_range = [_xmin - 0.10 * _span, _xmax + 0.16 * _span]
-    y_range = [_ACC_FLOOR, 102]
+    _ys = pd.to_numeric(pts[_AVERAGE_COL], errors="coerce")
+    _ymin = float(_ys.min()) if not _ys.dropna().empty else 0.0
+    y_range = [max(0.0, _ymin - 5), 105]
 
     # Choose a non-overlapping side for each model's label.
     _pos = _label_positions(pts["tokens_per_query"].tolist(),
                             pts[_AVERAGE_COL].tolist(), x_range, y_range)
     pos_map = dict(zip(pts["full_model"].tolist(), _pos))
 
-    palette = {"openai": "#10a37f", "anthropic": "#d97757", "google": "#4285f4"}
+    palette = {"openai": "#10a37f", "anthropic": "#d97757", "google": "#4285f4",
+               "meta-llama": "#7c3aed", "nvidia": "#ca8a04", "mistralai": "#e11d48",
+               "deepseek": "#0891b2", "qwen": "#db2777"}
+    # Color = org/family; marker shape = open-weight (diamond) vs proprietary (circle).
+    # Real points are hidden from the legend; a custom grouped legend is built below.
     for fam, grp in pts.groupby("family"):
+        symbols = [(_MARKER_OPEN if _is_open_source(fm) else _MARKER_CLOSED)
+                   for fm in grp["full_model"]]
         fig.add_trace(go.Scatter(
             x=grp["tokens_per_query"],
             y=grp[_AVERAGE_COL],
             mode="markers+text",
             name=str(fam),
-            marker=dict(size=12, color=palette.get(str(fam), "#94a3b8"),
+            showlegend=False,
+            marker=dict(size=12, symbol=symbols,
+                        color=palette.get(str(fam), "#94a3b8"),
                         line=dict(width=1, color="white")),
             text=grp["display"],
             textposition=[pos_map[fm] for fm in grp["full_model"]],
@@ -1018,7 +1041,7 @@ def build_efficiency_frontier(leaderboard_df: pd.DataFrame, metrics_df: pd.DataF
     fig.update_layout(
         autosize=True,
         height=440,
-        margin=dict(l=64, r=116, t=30, b=58),
+        margin=dict(l=64, r=150, t=30, b=58),
         xaxis=dict(
             title="Average tokens per query",
             tickformat="~s",
@@ -1029,35 +1052,66 @@ def build_efficiency_frontier(leaderboard_df: pd.DataFrame, metrics_df: pd.DataF
         ),
         yaxis=dict(
             title="Overall accuracy (%)",
-            range=[_ACC_FLOOR, 102],
+            range=y_range,
             showgrid=True, gridcolor=_GRID_COLOR, gridwidth=1,
             showline=True, linecolor=_AXIS_COLOR, linewidth=1.2, mirror=True,
             ticks="outside", tickcolor=_AXIS_COLOR, zeroline=False,
         ),
-        legend=dict(title_text="Family", yanchor="top", y=1.0,
-                    xanchor="left", x=1.005, bgcolor="rgba(0,0,0,0)"),
+        showlegend=False,
         hovermode="closest",
         plot_bgcolor="rgba(0,0,0,0)",
         paper_bgcolor="rgba(0,0,0,0)",
     )
 
-    # Icon legend on the RIGHT side of the chart (kept out of the title). The
-    # per-point emoji above mark the actual models; this explains them.
-    _legend_lines = [(_HIGHLIGHT_EMOJI["best"], "best overall"),
-                     (_HIGHLIGHT_EMOJI["eff"], "most efficient"),
-                     (_HIGHLIGHT_EMOJI["cheap"], "cheapest")]
-    for i, (emo, desc) in enumerate(_legend_lines):
+    # ---- Right-side legend, built manually. Each row is one annotation: a
+    # larger colored <span> glyph (■ / ◆● / emoji) immediately followed by the
+    # label, so the marker is big and sits tight against the text. Three titled
+    # groups in one consistent style. ----
+    _fams = sorted(pts["family"].dropna().unique())
+    _lx = 1.02                 # single left-aligned column (paper x)
+    _dy, _gap = 0.052, 0.1    # fixed tight row / group spacing
+    _ly = [1.0]                # mutable y-cursor
+
+    def _leg_title(text):
+        fig.add_annotation(xref="paper", yref="paper", x=_lx, y=_ly[0],
+                           xanchor="left", yanchor="middle", showarrow=False,
+                           text=f"<b>{text}</b>", font=dict(size=12, color="#334155"))
+        _ly[0] -= _dy
+
+    def _leg_row(glyph, glyph_color, label, gpx=18):
         fig.add_annotation(
-            xref="paper", yref="paper", x=1.005, y=0.46 - i * 0.085,
+            xref="paper", yref="paper", x=_lx, y=_ly[0],
             xanchor="left", yanchor="middle", showarrow=False, align="left",
-            text=f"{emo} {desc}", font=dict(size=12, color="#334155"),
-        )
+            text=(f'<span style="font-size:{gpx}px;color:{glyph_color}">{glyph}</span>'
+                  f' {label}'),
+            font=dict(size=13, color="#334155"))
+        _ly[0] -= _dy
+
+    _leg_title("Family")
+    for _fam in _fams:
+        _leg_row("■", palette.get(str(_fam), "#94a3b8"), str(_fam), gpx=18)
+    _ly[0] -= _gap
+    _leg_title("Model type")
+    _leg_row("◆", "#64748b", "Open-weight", gpx=16)
+    _leg_row("●", "#64748b", "Proprietary", gpx=16)
+    _ly[0] -= _gap
+    _leg_title("Highlights")
+    _leg_row(_HIGHLIGHT_EMOJI["best"], "#334155", "Best overall", gpx=15)
+    _leg_row(_HIGHLIGHT_EMOJI["eff"], "#334155", "Most efficient", gpx=15)
+    _leg_row(_HIGHLIGHT_EMOJI["cheap"], "#334155", "Cheapest", gpx=15)
 
     if n_dropped:
         fig.add_annotation(
             text=f"{n_dropped} model(s) hidden — no token data",
             showarrow=False, xref="paper", yref="paper", x=1.0, y=-0.16,
             xanchor="right", font=dict(size=10, color="#94a3b8"),
+        )
+    # Open-weight multi-agent token costs are estimated (single-agent is measured).
+    if "multi" in workflow_label.lower():
+        fig.add_annotation(
+            text="open-weight token costs are estimated",
+            showarrow=False, xref="paper", yref="paper", x=0.0, y=-0.16,
+            xanchor="left", font=dict(size=10, color="#94a3b8"),
         )
     return fig
 
@@ -1108,7 +1162,7 @@ with demo:
                         'Token = avg tokens / query.</div>'
                     )
                     gr.Plot(
-                        value=build_efficiency_frontier(df, metrics_df),
+                        value=build_efficiency_frontier(df, metrics_df, workflow_label=label),
                         elem_id=f"{base_elem_id}-frontier",
                         elem_classes="cg-frontier-plot",
                     )

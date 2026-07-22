@@ -98,9 +98,7 @@ WORKFLOWS="${WORKFLOWS:-single_agent multi_agent}"
 # Output directory for eval results (chemgraph-eval default)
 EVAL_OUTPUT_DIR="${EVAL_OUTPUT_DIR:-$CHEMGRAPH_DIR/eval_results}"
 
-# Ground-truth dataset passed to chemgraph-eval via --dataset. Required on
-# ChemGraph versions with no bundled default (e.g. PR #138/#139). Leave empty
-# to rely on the bundled default (older ChemGraph).
+# Ground-truth dataset passed to chemgraph-eval via --dataset.
 DATASET="${DATASET:-}"
 DATASET_ARG=""
 [ -n "$DATASET" ] && DATASET_ARG="--dataset $DATASET"
