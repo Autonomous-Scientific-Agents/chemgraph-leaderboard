@@ -1535,7 +1535,7 @@ with demo:
                 )
 
             # ---- Part 1: basic information ----
-            gr.HTML("<div class='cg-form-section-title'>1 · Basic information</div>")
+            gr.HTML("<div class='cg-form-section-title'>1. Basic information</div>")
             with gr.Column(elem_classes="cg-form-group"):
                 with gr.Row():
                     task_author = gr.Textbox(label="Your name")
@@ -1560,7 +1560,7 @@ with demo:
                         task_subfield = gr.Textbox(label="Subfield", value="computational-chemistry")
 
             # ---- Part 2: task composition ----
-            gr.HTML("<div class='cg-form-section-title'>2 · Task composition</div>")
+            gr.HTML("<div class='cg-form-section-title'>2. Task composition</div>")
             with gr.Column(elem_classes="cg-form-group"):
                 task_query = gr.Textbox(
                     label="Query", lines=3,

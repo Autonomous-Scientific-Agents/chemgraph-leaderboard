@@ -823,7 +823,7 @@ custom_css = """
 .cg-form-section-title {
     font-size: 1.05rem;
     font-weight: 700;
-    color: var(--cg-primary);
+    color: #000000;
     margin: 0.8rem 0 0.4rem;
 }
 
