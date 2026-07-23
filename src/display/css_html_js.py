@@ -934,6 +934,44 @@ custom_css = """
     border-radius: var(--cg-radius-sm);
     padding: 0.6rem 0.85rem;
 }
+/* The identity/progress row (left | right). Charts (if any) sit below it. */
+.cg-sub-row {
+    display: flex;
+    align-items: stretch;
+    justify-content: space-between;
+    gap: 1rem;
+}
+/* Left column: identity (name + tags + submitter/date/category). */
+.cg-sub-main {
+    flex: 1 1 auto;
+    min-width: 0;  /* let long names wrap instead of pushing the aside off */
+}
+/* Right column: progress/result pinned top, link pinned bottom. */
+.cg-sub-aside {
+    flex: 0 0 auto;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 0.4rem;
+    text-align: right;
+}
+.cg-sub-meta {
+    font-size: 0.75rem;
+    color: var(--cg-text-muted);
+    margin-top: 0.3rem;
+    line-height: 1.4;
+}
+.cg-sub-link {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--cg-primary);
+    text-decoration: none;
+    white-space: nowrap;
+}
+.cg-sub-link:hover {
+    text-decoration: underline;
+}
 .cg-sub-name {
     font-size: 0.95rem;
     font-weight: 700;
@@ -963,7 +1001,8 @@ custom_css = """
     display: flex;
     align-items: center;
     flex-wrap: wrap;
-    margin-top: 0.5rem;
+    justify-content: flex-end;
+    margin-top: 0;  /* sits at the top of the right column now */
     font-size: 0.8rem;
 }
 .cg-step {
@@ -987,8 +1026,9 @@ custom_css = """
     display: flex;
     align-items: center;
     flex-wrap: wrap;
+    justify-content: flex-end;
     gap: 0.5rem;
-    margin-top: 0.5rem;
+    margin-top: 0;  /* sits at the top of the right column now */
 }
 .cg-done-badge {
     display: inline-flex;
@@ -1022,6 +1062,130 @@ custom_css = """
     font-size: 0.9rem;
     padding: 0.5rem 0;
 }
+/* Narrow screens: fall back to a single stacked column (left-aligned). */
+@media (max-width: 640px) {
+    .cg-sub-row {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    .cg-sub-aside {
+        align-items: flex-start;
+        text-align: left;
+    }
+    .cg-stepper,
+    .cg-sub-result {
+        justify-content: flex-start;
+    }
+}
+
+/* ---------------------------------------------------------------- */
+/* Completed-task expandable charts panel                            */
+/* ---------------------------------------------------------------- */
+.cg-task-charts {
+    margin-top: 0.6rem;
+    border-top: 1px dashed var(--cg-border);
+    padding-top: 0.1rem;
+}
+.cg-task-charts > summary {
+    list-style: none;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--cg-primary);
+    padding: 0.45rem 0 0.2rem;
+    user-select: none;
+}
+.cg-task-charts > summary::-webkit-details-marker { display: none; }
+.cg-task-charts > summary::before {
+    content: "▸";
+    font-size: 0.7rem;
+    transition: transform 0.15s ease;
+}
+.cg-task-charts[open] > summary::before { content: "▾"; }
+.cg-task-charts > summary:hover { text-decoration: underline; }
+.cg-charts-body {
+    padding: 0.4rem 0.1rem 0.2rem;
+}
+.cg-charts-note {
+    font-size: 0.74rem;
+    color: var(--cg-text-muted);
+    margin-bottom: 0.7rem;
+}
+.cg-charts-note b { color: var(--cg-text-secondary); font-weight: 600; }
+.cg-chart-block { margin-top: 1rem; }
+/* Bar + pie side by side (wraps to a column on narrow screens). */
+.cg-charts-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: 0.6rem 1.75rem;
+    margin-top: 1rem;
+}
+.cg-charts-row .cg-chart-block { margin-top: 0; }
+.cg-chart-bar { flex: 2 1 360px; min-width: 0; }
+.cg-chart-pie { flex: 1 1 260px; min-width: 0; }
+.cg-chart-title {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--cg-text-primary);
+    margin-bottom: 0.5rem;
+}
+.cg-chart-empty {
+    font-size: 0.82rem;
+    color: var(--cg-text-muted);
+    padding: 0.4rem 0;
+}
+/* shared legend (token bar) + swatches */
+.cg-chart-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem 1rem;
+    font-size: 0.76rem;
+    color: var(--cg-text-secondary);
+    margin-bottom: 0.5rem;
+}
+.cg-lg { display: inline-flex; align-items: center; gap: 0.4rem; }
+.cg-sw {
+    display: inline-block;
+    width: 0.8rem;
+    height: 0.8rem;
+    border-radius: 3px;
+    flex: 0 0 auto;
+}
+.cg-sw-hatch {
+    background-image: repeating-linear-gradient(
+        45deg, transparent, transparent 2px,
+        rgba(255, 255, 255, 0.6) 2px, rgba(255, 255, 255, 0.6) 3.5px) !important;
+    background-blend-mode: normal;
+}
+.cg-token-svg { display: block; max-width: 760px; }
+/* donut + legend */
+.cg-pie-wrap {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.4rem 1.5rem;
+}
+.cg-pie-svg { flex: 0 0 auto; }
+.cg-pie-legend {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    min-width: 200px;
+}
+.cg-pie-li {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.8rem;
+    padding: 0.16rem 0;
+    color: var(--cg-text-secondary);
+}
+.cg-pie-name { flex: 1 1 auto; }
+.cg-pie-val { color: var(--cg-text-muted); font-variant-numeric: tabular-nums; }
 
 /* Bold dark chart title (黑体). */
 .cg-section-label {

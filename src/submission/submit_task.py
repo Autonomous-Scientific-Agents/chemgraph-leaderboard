@@ -30,6 +30,7 @@ from src.submission.check_task import (
     slugify,
     validate_slug,
 )
+from src.submission.task_charts import render_task_charts
 
 _TEMPLATES = Path(__file__).resolve().parent / "task_pack" / "templates"
 _DEFAULT_BASE_IMAGE = "chemgraph-arm:latest"
@@ -372,6 +373,7 @@ def get_submitted_tasks() -> List[Dict[str, Any]]:
             slug = f.rsplit("/", 2)[-2]  # parent-dir name
             data = _read_submission_json(f) or {}
             merged_slugs.add(data.get("slug") or slug)
+            path_in_repo = data.get("path_in_repo") or f.rsplit("/", 1)[0]
             tasks.append(
                 {
                     "name": data.get("title") or slug,
@@ -380,6 +382,10 @@ def get_submitted_tasks() -> List[Dict[str, Any]]:
                     # Evaluation outcome (how it's produced is deferred — the
                     # renderer shows "pending" when absent).
                     "result": data.get("result"),
+                    "submitter": data.get("submitter") or data.get("organization") or "",
+                    "submitted_time": data.get("submitted_time") or "",
+                    "category": data.get("category") or "",
+                    "url": f"https://huggingface.co/datasets/{TASKS_REPO}/tree/main/{path_in_repo}",
                 }
             )
 
@@ -404,6 +410,10 @@ def get_submitted_tasks() -> List[Dict[str, Any]]:
                 "tools": data.get("tools") or [],
                 "status": _normalize_status(data.get("status")),
                 "result": None,
+                "submitter": data.get("submitter") or data.get("organization") or "",
+                "submitted_time": data.get("submitted_time") or "",
+                "category": data.get("category") or "",
+                "url": f"https://huggingface.co/datasets/{TASKS_REPO}/discussions/{disc.num}",
             }
         )
 
@@ -467,20 +477,99 @@ def _tags_html(tools: List[str]) -> str:
     return f"<div class='cg-sub-tags'>{tags}</div>" if tags else ""
 
 
+def _relative_time(iso: Optional[str]) -> str:
+    """Human 'time ago' from a UTC ISO timestamp (``%Y-%m-%dT%H:%M:%SZ``).
+
+    Returns "" if absent/unparseable so the meta line can just skip it.
+    """
+    if not iso:
+        return ""
+    try:
+        ts = datetime.strptime(iso, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+    except Exception:
+        return ""
+    secs = int((datetime.now(timezone.utc) - ts).total_seconds())
+    if secs < 60:
+        return "just now"
+    mins = secs // 60
+    if mins < 60:
+        return f"{mins}m ago"
+    hrs = mins // 60
+    if hrs < 24:
+        return f"{hrs}h ago"
+    days = hrs // 24
+    if days < 7:
+        return f"{days}d ago"
+    weeks = days // 7
+    if weeks < 5:
+        return f"{weeks}w ago"
+    months = days // 30
+    if months < 12:
+        return f"{months}mo ago"
+    return f"{days // 365}y ago"
+
+
+def _meta_html(task: Dict[str, Any]) -> str:
+    """The muted 'by <submitter> · <time ago> · <category>' line.
+
+    Each piece is omitted when missing; renders nothing if all are empty.
+    """
+    bits: List[str] = []
+    submitter = (task.get("submitter") or "").strip()
+    if submitter:
+        bits.append("by " + html.escape(submitter))
+    ago = _relative_time(task.get("submitted_time"))
+    if ago:
+        bits.append(html.escape(ago))
+    category = (task.get("category") or "").strip()
+    if category:
+        bits.append(html.escape(category))
+    if not bits:
+        return ""
+    return "<div class='cg-sub-meta'>" + " · ".join(bits) + "</div>"
+
+
+def _link_html(url: Optional[str], label: str) -> str:
+    """A small right-aligned external link (e.g. 'View PR ↗'); "" if no url."""
+    if not url:
+        return ""
+    return (
+        f"<a class='cg-sub-link' href=\"{html.escape(url, quote=True)}\" "
+        f"target='_blank' rel='noopener'>{html.escape(label)} ↗</a>"
+    )
+
+
 def _task_card(task: Dict[str, Any], *, done: bool) -> str:
+    """A single status row: identity on the left, progress/result on the right.
+
+    Left column (``cg-sub-main``): task name, tool tags, submitter/date/category.
+    Right column (``cg-sub-aside``): the stepper (pending) or the done badge +
+    evaluation result (completed), with a link to the PR / merged task below.
+    """
     name = html.escape(task["name"] or "")
-    body = f"<div class='cg-sub-name'>{name}</div>{_tags_html(task.get('tools'))}"
+    main = (
+        f"<div class='cg-sub-name'>{name}</div>"
+        f"{_tags_html(task.get('tools'))}"
+        f"{_meta_html(task)}"
+    )
+    charts = ""
     if done:
         # Completed: a done badge + the evaluation result (source TBD).
-        body += (
+        status_block = (
             "<div class='cg-sub-result'>"
             "<span class='cg-done-badge'>✓ Completed</span>"
             f"{_format_result(task.get('result'))}"
             "</div>"
         )
+        link = _link_html(task.get("url"), "View task")
+        # Expandable visualization panel (KPI + token stacked bar + tool pie).
+        charts = render_task_charts(task)
     else:
-        body += _status_stepper_html(task["status"])
-    return f"<div class='cg-sub-card'>{body}</div>"
+        status_block = _status_stepper_html(task["status"])
+        link = _link_html(task.get("url"), "View PR")
+    aside = f"<div class='cg-sub-aside'>{status_block}{link}</div>"
+    row = f"<div class='cg-sub-row'><div class='cg-sub-main'>{main}</div>{aside}</div>"
+    return f"<div class='cg-sub-card'>{row}{charts}</div>"
 
 
 def _status_section(title: str, tasks: List[Dict[str, Any]], *, done: bool, empty: str) -> str:
