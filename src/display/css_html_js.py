@@ -826,6 +826,15 @@ custom_css = """
     color: #000000;
     margin: 0.8rem 0 0.4rem;
 }
+/* Section title + inline action button (e.g. Submission status + Refresh). */
+.cg-form-section-title-row {
+    align-items: center !important;
+    gap: 0.6rem !important;
+    flex-wrap: nowrap !important;
+}
+.cg-form-section-title-row .cg-form-section-title {
+    margin: 0.4rem 0;
+}
 
 /* Opening description — boxed (a .cg-form-group card) with a blue heading. */
 .cg-contribute-intro h1,
@@ -882,6 +891,137 @@ custom_css = """
 .cg-tool-tags label:nth-of-type(7) { --tag: #0891b2; }  /* AIMNet2— cyan   */
 .cg-tool-tags label:nth-of-type(8) { --tag: #dc2626; }  /* gRASPA — red    */
 .cg-tool-tags label:nth-of-type(9) { --tag: #65a30d; }  /* XANES  — lime   */
+
+/* ---------------------------------------------------------------- */
+/* Submission status board (Contribute tab)                          */
+/* ---------------------------------------------------------------- */
+.cg-sub-section {
+    margin-bottom: 1.1rem;
+}
+.cg-sub-section-head {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: var(--cg-text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    margin: 0.2rem 0 0.5rem;
+}
+.cg-sub-count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 1.3rem;
+    height: 1.3rem;
+    padding: 0 0.4rem;
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: var(--cg-text-muted);
+    background: var(--cg-surface-alt);
+    border: 1px solid var(--cg-border);
+    border-radius: 999px;
+}
+.cg-sub-board {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+.cg-sub-card {
+    background: var(--cg-surface);
+    border: 1px solid var(--cg-border);
+    border-radius: var(--cg-radius-sm);
+    padding: 0.6rem 0.85rem;
+}
+.cg-sub-name {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: var(--cg-text-primary);
+    line-height: 1.3;
+}
+.cg-sub-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    margin: 0.35rem 0 0.1rem;
+}
+.cg-sub-tag {
+    display: inline-flex;
+    align-items: center;
+    font-size: 0.72rem;
+    font-weight: 600;
+    line-height: 1.4;
+    padding: 0.08rem 0.55rem;
+    border-radius: 999px;
+    border: 1.5px solid var(--tag, #94a3b8);
+    color: var(--tag, #475569);
+    background: transparent;
+}
+/* 4-step progress stepper: Review -> Validation -> Evaluation -> Done. */
+.cg-stepper {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    margin-top: 0.5rem;
+    font-size: 0.8rem;
+}
+.cg-step {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.28rem;
+    white-space: nowrap;
+}
+.cg-step.done { color: #16a34a; }
+.cg-step.current { color: var(--cg-primary); font-weight: 700; }
+.cg-step.todo { color: var(--cg-text-muted); }
+.cg-conn {
+    width: 28px;
+    height: 2px;
+    background: var(--cg-border);
+    margin: 0 0.55rem;
+}
+.cg-conn.done { background: #16a34a; }
+/* Completed-task row: a done badge + the evaluation result chip. */
+.cg-sub-result {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+}
+.cg-done-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: #16a34a;
+    background: rgba(22, 163, 74, 0.1);
+    border: 1px solid rgba(22, 163, 74, 0.35);
+    border-radius: 999px;
+    padding: 0.1rem 0.6rem;
+}
+.cg-result {
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: var(--cg-primary);
+    background: rgba(37, 99, 235, 0.08);
+    border: 1px solid rgba(37, 99, 235, 0.3);
+    border-radius: 999px;
+    padding: 0.1rem 0.6rem;
+}
+.cg-result-pending {
+    color: var(--cg-text-muted);
+    background: var(--cg-surface-alt);
+    border-color: var(--cg-border);
+    font-weight: 600;
+}
+.cg-sub-empty {
+    color: var(--cg-text-muted);
+    font-size: 0.9rem;
+    padding: 0.5rem 0;
+}
 
 /* Bold dark chart title (黑体). */
 .cg-section-label {

@@ -55,7 +55,7 @@ from src.populate import (
     get_combined_trend_summary_df,
 )
 from src.submission.submit import add_new_eval
-from src.submission.submit_task import add_new_task
+from src.submission.submit_task import add_new_task, build_task_status_view
 
 # --local flag: skip HF Hub downloads and scheduler, use local data only.
 LOCAL_MODE = "--local" in sys.argv
@@ -1523,119 +1523,143 @@ with demo:
             )
 
         with gr.TabItem("🧪 Contribute a Task", elem_id="llm-benchmark-tab-table", id=5):
-            with gr.Column(elem_classes="cg-form-group cg-contribute-intro-box"):
-                gr.Markdown(
-                    "## Contribute an evaluation task\n"
-                    "Add your own chemistry eval task to the benchmark. You only provide the "
-                    "**query**, an **oracle** that proves it's solvable (solve.sh + solve.py), "
-                    "and the **ground truth**. We assemble a complete "
-                    f"[harbor compatible task](https://huggingface.co/datasets/{TASKS_REPO}) "
-                    "and store it for review — nothing runs until an admin approves it.",
-                    elem_classes="cg-contribute-intro",
-                )
+          with gr.Tabs(elem_classes="tab-buttons", elem_id="cg-contribute-subtabs"):
+            # ============ Sub-tab 1: submit a new task ============
+            with gr.TabItem("📝 Submit a task", id=0):
+                with gr.Column(elem_classes="cg-form-group cg-contribute-intro-box"):
+                    gr.Markdown(
+                        "## Contribute an evaluation task\n"
+                        "Add your own chemistry eval task to the benchmark. You only provide the "
+                        "**query**, an **oracle** that proves it's solvable (solve.sh + solve.py), "
+                        "and the **ground truth**. We assemble a complete "
+                        f"[harbor compatible task](https://huggingface.co/datasets/{TASKS_REPO}) "
+                        "and open a pull request — nothing runs until a maintainer reviews it.",
+                        elem_classes="cg-contribute-intro",
+                    )
 
-            # ---- Part 1: basic information ----
-            gr.HTML("<div class='cg-form-section-title'>1. Basic information</div>")
-            with gr.Column(elem_classes="cg-form-group"):
-                with gr.Row():
-                    task_author = gr.Textbox(label="Your name")
-                    task_email = gr.Textbox(label="Email / contact")
-                    task_org = gr.Textbox(label="Organization (optional)")
-                with gr.Row():
-                    task_name_tb = gr.Textbox(
-                        label="Task name", placeholder="e.g. so2-dipole-gfn2",
-                    )
-                    task_category = gr.Dropdown(
-                        choices=[t.value.benchmark for t in Tasks],
-                        label="Category", value="smiles_lookup", interactive=True,
-                    )
-                task_notes = gr.Textbox(
-                    label="Description", lines=3,
-                    info="What the task asks and what makes it hard (optional).",
-                )
-                with gr.Accordion("Advanced — domain / field / subfield", open=False):
+                # ---- Part 1: basic information ----
+                gr.HTML("<div class='cg-form-section-title'>1. Basic information</div>")
+                with gr.Column(elem_classes="cg-form-group"):
                     with gr.Row():
-                        task_domain = gr.Textbox(label="Domain", value="physical-sciences")
-                        task_field = gr.Textbox(label="Field", value="chemistry-and-materials")
-                        task_subfield = gr.Textbox(label="Subfield", value="computational-chemistry")
-
-            # ---- Part 2: task composition ----
-            gr.HTML("<div class='cg-form-section-title'>2. Task composition</div>")
-            with gr.Column(elem_classes="cg-form-group"):
-                task_query = gr.Textbox(
-                    label="Query", lines=3,
-                    value="Provide the SMILES string corresponding to this molecule: sulfur dioxide",
-                    info="The natural-language chemistry question the agent must answer.",
-                )
-                task_ground_truth = gr.Code(
-                    label="Ground truth (structured_output JSON, or a full answer object)",
-                    language="json",
-                    value='{\n  "smiles": ["O=S=O"]\n}',
-                )
-                with gr.Row():
-                    task_solve_py = gr.Code(
-                        label="solve.py — oracle that writes /root/results/answers.json",
-                        language="python",
-                        value=(
-                            "import json\n"
-                            "from pathlib import Path\n\n"
-                            "# Oracle: reproduce the ground truth. Replace this with a real\n"
-                            "# computation (ase / rdkit / mace / tblite) that derives the answer\n"
-                            "# from scratch — it must match your ground truth.\n"
-                            'queries = json.loads(Path("/root/data/queries.json").read_text())\n'
-                            "answers = []\n"
-                            "for q in queries:\n"
-                            "    answers.append({\n"
-                            '        "id": q["id"],\n'
-                            '        "category": q.get("category", ""),\n'
-                            '        "query": q["query"],\n'
-                            '        "answer": {"structured_output": {"smiles": ["O=S=O"]}},\n'
-                            "    })\n"
-                            'Path("/root/results").mkdir(parents=True, exist_ok=True)\n'
-                            'Path("/root/results/answers.json").write_text(json.dumps(answers, indent=2))\n'
-                        ),
+                        task_author = gr.Textbox(label="Your name")
+                        task_email = gr.Textbox(label="Email / contact")
+                        task_org = gr.Textbox(label="Organization (optional)")
+                    with gr.Row():
+                        task_name_tb = gr.Textbox(
+                            label="Task name", placeholder="e.g. so2-dipole-gfn2",
+                        )
+                        task_category = gr.Dropdown(
+                            choices=[t.value.benchmark for t in Tasks],
+                            label="Category", value="smiles_lookup", interactive=True,
+                        )
+                    task_notes = gr.Textbox(
+                        label="Description", lines=3,
+                        info="What the task asks and what makes it hard (optional).",
                     )
-                    with gr.Column():
-                        task_solve_sh = gr.Code(
-                            label="solve.sh — entrypoint (leave as-is to just run solve.py)",
-                            language="shell",
+                    with gr.Accordion("Advanced — domain / field / subfield", open=False):
+                        with gr.Row():
+                            task_domain = gr.Textbox(label="Domain", value="physical-sciences")
+                            task_field = gr.Textbox(label="Field", value="chemistry-and-materials")
+                            task_subfield = gr.Textbox(label="Subfield", value="computational-chemistry")
+
+                # ---- Part 2: task composition ----
+                gr.HTML("<div class='cg-form-section-title'>2. Task composition</div>")
+                with gr.Column(elem_classes="cg-form-group"):
+                    task_query = gr.Textbox(
+                        label="Query", lines=3,
+                        value="Provide the SMILES string corresponding to this molecule: sulfur dioxide",
+                        info="The natural-language chemistry question the agent must answer.",
+                    )
+                    task_ground_truth = gr.Code(
+                        label="Ground truth (structured_output JSON, or a full answer object)",
+                        language="json",
+                        value='{\n  "smiles": ["O=S=O"]\n}',
+                    )
+                    with gr.Row():
+                        task_solve_py = gr.Code(
+                            label="solve.py — oracle that writes /root/results/answers.json",
+                            language="python",
                             value=(
-                                "#!/bin/bash\n"
-                                "set -euo pipefail\n"
-                                'DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"\n'
-                                'python3 "$DIR/solve.py"\n'
+                                "import json\n"
+                                "from pathlib import Path\n\n"
+                                "# Oracle: reproduce the ground truth. Replace this with a real\n"
+                                "# computation (ase / rdkit / mace / tblite) that derives the answer\n"
+                                "# from scratch — it must match your ground truth.\n"
+                                'queries = json.loads(Path("/root/data/queries.json").read_text())\n'
+                                "answers = []\n"
+                                "for q in queries:\n"
+                                "    answers.append({\n"
+                                '        "id": q["id"],\n'
+                                '        "category": q.get("category", ""),\n'
+                                '        "query": q["query"],\n'
+                                '        "answer": {"structured_output": {"smiles": ["O=S=O"]}},\n'
+                                "    })\n"
+                                'Path("/root/results").mkdir(parents=True, exist_ok=True)\n'
+                                'Path("/root/results/answers.json").write_text(json.dumps(answers, indent=2))\n'
                             ),
                         )
-                        task_tools = gr.CheckboxGroup(
-                            choices=["RDKit", "MACE", "TBLite", "NWChem", "ORCA",
-                                     "UMA", "AIMNet2", "gRASPA", "XANES"],
-                            label="Tools used",
-                            info="Click to select the compute tools your task relies on.",
-                            elem_classes="cg-tool-tags",
-                        )
+                        with gr.Column():
+                            task_solve_sh = gr.Code(
+                                label="solve.sh — entrypoint (leave as-is to just run solve.py)",
+                                language="shell",
+                                value=(
+                                    "#!/bin/bash\n"
+                                    "set -euo pipefail\n"
+                                    'DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"\n'
+                                    'python3 "$DIR/solve.py"\n'
+                                ),
+                            )
+                            task_tools = gr.CheckboxGroup(
+                                choices=["RDKit", "MACE", "TBLite", "NWChem", "ORCA",
+                                         "UMA", "AIMNet2", "gRASPA", "XANES"],
+                                label="Tools used",
+                                info="Click to select the compute tools your task relies on.",
+                                elem_classes="cg-tool-tags",
+                            )
 
-            submit_task_button = gr.Button("Submit Task", elem_id="cg-submit-btn")
-            task_submit_result = gr.Markdown()
-            submit_task_button.click(
-                add_new_task,
-                [
-                    task_name_tb,
-                    task_category,
-                    task_query,
-                    task_ground_truth,
-                    task_solve_sh,
-                    task_solve_py,
-                    task_author,
-                    task_email,
-                    task_org,
-                    task_domain,
-                    task_field,
-                    task_subfield,
-                    task_notes,
-                    task_tools,
-                ],
-                task_submit_result,
-            )
+                submit_task_button = gr.Button("Submit Task", elem_id="cg-submit-btn")
+                task_submit_result = gr.Markdown()
+
+            # ============ Sub-tab 2: submission status board ============
+            # Each submitted task advances review -> validation -> evaluation on
+            # its open PR, and is merged (done) once evaluation passes.
+            with gr.TabItem("📋 Submission status", id=1):
+                with gr.Row(elem_classes="cg-form-section-title-row"):
+                    gr.HTML(
+                        "<div class='cg-form-section-title'>Submission status</div>"
+                        "<div class='cg-section-sub'>Community tasks and where each one "
+                        "is in the review → validation → evaluation → done pipeline.</div>"
+                    )
+                    refresh_status_button = gr.Button(
+                        "↻ Refresh", size="sm", elem_classes="cg-viewall-btn", scale=0
+                    )
+                task_status_view = gr.HTML(build_task_status_view)
+
+          # --- wiring (outside the sub-tabs so all handles are in scope) ---
+          refresh_status_button.click(fn=build_task_status_view, outputs=task_status_view)
+          submit_task_button.click(
+              add_new_task,
+              [
+                  task_name_tb,
+                  task_category,
+                  task_query,
+                  task_ground_truth,
+                  task_solve_sh,
+                  task_solve_py,
+                  task_author,
+                  task_email,
+                  task_org,
+                  task_domain,
+                  task_field,
+                  task_subfield,
+                  task_notes,
+                  task_tools,
+              ],
+              task_submit_result,
+          )
+          # Refresh the status board right after a successful submission so the
+          # contributor sees their new task appear (as "under review").
+          submit_task_button.click(fn=build_task_status_view, outputs=task_status_view)
 
     gr.Markdown(INTRODUCTION_TEXT, elem_classes="markdown-text", elem_id="cg-intro-block")
 
