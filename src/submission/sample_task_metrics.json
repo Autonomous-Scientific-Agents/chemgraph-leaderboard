@@ -1,957 +1,1028 @@
 {
-  "workflow": "single_agent",
+  "workflow": "multi_agent",
   "pass_threshold": 1.0,
-  "source": "metrics_2026-06-23.json (real prior single_agent run) + eval-results accuracy",
+  "source": "metrics_2026-06-23.json (real prior multi_agent run) + eval-results accuracy",
   "categories": {
     "smiles_lookup": {
-      "n_models": 31,
-      "n_passed": 25,
-      "eval_time_s": 655.6,
+      "n_models": 27,
+      "n_passed": 9,
+      "eval_time_s": 594.7,
       "per_model": [
         {
-          "model": "claude-opus-4.6",
-          "prompt_fresh": 66355,
+          "model": "claude-opus-4.1",
+          "prompt_fresh": 88524,
           "cached": 0,
-          "completion": 841
-        },
-        {
-          "model": "claude-haiku-4.5",
-          "prompt_fresh": 66331,
-          "cached": 0,
-          "completion": 809
+          "completion": 1740
         },
         {
           "model": "claude-opus-4.5",
-          "prompt_fresh": 66278,
+          "prompt_fresh": 66133,
           "cached": 0,
-          "completion": 724
-        },
-        {
-          "model": "claude-sonnet-4",
-          "prompt_fresh": 65028,
-          "cached": 0,
-          "completion": 932
-        },
-        {
-          "model": "claude-opus-4",
-          "prompt_fresh": 64889,
-          "cached": 0,
-          "completion": 821
+          "completion": 1561
         },
         {
           "model": "claude-haiku-3.5",
-          "prompt_fresh": 64850,
+          "prompt_fresh": 56551,
           "cached": 0,
-          "completion": 847
+          "completion": 1409
         },
         {
-          "model": "claude-opus-4.1",
-          "prompt_fresh": 64839,
+          "model": "claude-opus-4",
+          "prompt_fresh": 43223,
           "cached": 0,
-          "completion": 791
+          "completion": 1158
+        },
+        {
+          "model": "claude-opus-4.6",
+          "prompt_fresh": 22283,
+          "cached": 0,
+          "completion": 1663
         },
         {
           "model": "o1",
-          "prompt_fresh": 21447,
-          "cached": 25344,
-          "completion": 3985
-        },
-        {
-          "model": "o4-mini",
-          "prompt_fresh": 13207,
-          "cached": 33536,
-          "completion": 2166
+          "prompt_fresh": 8882,
+          "cached": 5248,
+          "completion": 5582
         },
         {
           "model": "o3-mini",
-          "prompt_fresh": 25321,
-          "cached": 21504,
-          "completion": 1765
+          "prompt_fresh": 13022,
+          "cached": 1152,
+          "completion": 4810
+        },
+        {
+          "model": "claude-haiku-4.5",
+          "prompt_fresh": 17041,
+          "cached": 0,
+          "completion": 1255
+        },
+        {
+          "model": "claude-sonnet-4.5",
+          "prompt_fresh": 16943,
+          "cached": 0,
+          "completion": 759
+        },
+        {
+          "model": "claude-sonnet-4",
+          "prompt_fresh": 16913,
+          "cached": 0,
+          "completion": 595
         }
       ],
       "per_tool": {
-        "molecule_name_to_smiles": 17.81
+        "molecule_name_to_smiles": 2.44
+      },
+      "time_breakdown": {
+        "LLM calls": 590.38,
+        "Tool execution": 2.44,
+        "Other": 3.12
       }
     },
     "dipole_from_name": {
-      "n_models": 31,
-      "n_passed": 16,
-      "eval_time_s": 1031.4,
+      "n_models": 27,
+      "n_passed": 15,
+      "eval_time_s": 1693.2,
       "per_model": [
         {
-          "model": "claude-opus-4.1",
-          "prompt_fresh": 138364,
-          "cached": 0,
-          "completion": 2517
-        },
-        {
-          "model": "claude-opus-4",
-          "prompt_fresh": 119754,
-          "cached": 0,
-          "completion": 2369
-        },
-        {
-          "model": "gpt-4.1-mini",
-          "prompt_fresh": 25133,
-          "cached": 84352,
-          "completion": 1323
-        },
-        {
           "model": "claude-opus-4.6",
-          "prompt_fresh": 99125,
+          "prompt_fresh": 239912,
           "cached": 0,
-          "completion": 1909
-        },
-        {
-          "model": "o3",
-          "prompt_fresh": 16958,
-          "cached": 71680,
-          "completion": 7447
-        },
-        {
-          "model": "claude-sonnet-4",
-          "prompt_fresh": 85604,
-          "cached": 0,
-          "completion": 1850
-        },
-        {
-          "model": "claude-haiku-3.5",
-          "prompt_fresh": 85141,
-          "cached": 0,
-          "completion": 1781
-        },
-        {
-          "model": "claude-opus-4.5",
-          "prompt_fresh": 76920,
-          "cached": 0,
-          "completion": 1386
-        },
-        {
-          "model": "o1",
-          "prompt_fresh": 19366,
-          "cached": 44032,
-          "completion": 10534
+          "completion": 4788
         },
         {
           "model": "claude-haiku-4.5",
-          "prompt_fresh": 67861,
+          "prompt_fresh": 178683,
           "cached": 0,
-          "completion": 1467
+          "completion": 3854
+        },
+        {
+          "model": "claude-sonnet-4.5",
+          "prompt_fresh": 166889,
+          "cached": 0,
+          "completion": 3831
+        },
+        {
+          "model": "claude-sonnet-4",
+          "prompt_fresh": 164384,
+          "cached": 0,
+          "completion": 3528
+        },
+        {
+          "model": "claude-haiku-3.5",
+          "prompt_fresh": 157209,
+          "cached": 0,
+          "completion": 3182
+        },
+        {
+          "model": "claude-opus-4.5",
+          "prompt_fresh": 151697,
+          "cached": 0,
+          "completion": 3211
+        },
+        {
+          "model": "o3",
+          "prompt_fresh": 34135,
+          "cached": 95872,
+          "completion": 14079
+        },
+        {
+          "model": "claude-opus-4",
+          "prompt_fresh": 138415,
+          "cached": 0,
+          "completion": 2650
+        },
+        {
+          "model": "o4-mini",
+          "prompt_fresh": 32023,
+          "cached": 81024,
+          "completion": 27197
+        },
+        {
+          "model": "claude-opus-4.1",
+          "prompt_fresh": 129907,
+          "cached": 0,
+          "completion": 2527
         }
       ],
       "per_tool": {
-        "molecule_name_to_smiles": 9.21,
-        "smiles_to_coordinate_file": 0.28,
-        "run_ase": 0.24,
-        "calculator": 0.02,
-        "extract_output_json": 0.01
+        "molecule_name_to_smiles": 11.04,
+        "run_ase": 0.53,
+        "smiles_to_coordinate_file": 0.29,
+        "extract_output_json": 0.04,
+        "calculator": 0.03
+      },
+      "time_breakdown": {
+        "LLM calls": 1672.13,
+        "Tool execution": 11.93,
+        "Other": 9.12
       }
     },
     "dipole_from_smiles": {
-      "n_models": 31,
-      "n_passed": 17,
-      "eval_time_s": 779.3,
+      "n_models": 27,
+      "n_passed": 16,
+      "eval_time_s": 1601.7,
       "per_model": [
         {
-          "model": "claude-opus-4",
-          "prompt_fresh": 97919,
-          "cached": 0,
-          "completion": 2184
-        },
-        {
-          "model": "claude-opus-4.1",
-          "prompt_fresh": 87375,
-          "cached": 0,
-          "completion": 1896
-        },
-        {
           "model": "claude-opus-4.6",
-          "prompt_fresh": 78869,
+          "prompt_fresh": 348100,
           "cached": 0,
-          "completion": 1641
+          "completion": 8207
         },
         {
-          "model": "claude-opus-4.5",
-          "prompt_fresh": 69574,
-          "cached": 0,
-          "completion": 1458
+          "model": "gpt-4.1-nano",
+          "prompt_fresh": 67843,
+          "cached": 181888,
+          "completion": 5834
         },
         {
-          "model": "claude-haiku-4.5",
-          "prompt_fresh": 60268,
-          "cached": 0,
-          "completion": 1460
+          "model": "gpt-5.2",
+          "prompt_fresh": 65663,
+          "cached": 171136,
+          "completion": 5492
         },
         {
           "model": "claude-sonnet-4",
-          "prompt_fresh": 59577,
+          "prompt_fresh": 199462,
           "cached": 0,
-          "completion": 1643
+          "completion": 4500
         },
         {
-          "model": "o3",
-          "prompt_fresh": 10976,
-          "cached": 45440,
-          "completion": 4302
-        },
-        {
-          "model": "gpt-4.1-mini",
-          "prompt_fresh": 12261,
-          "cached": 47488,
-          "completion": 765
-        },
-        {
-          "model": "claude-haiku-3.5",
-          "prompt_fresh": 58502,
+          "model": "claude-haiku-4.5",
+          "prompt_fresh": 146285,
           "cached": 0,
-          "completion": 1287
+          "completion": 3832
+        },
+        {
+          "model": "o1",
+          "prompt_fresh": 32122,
+          "cached": 75776,
+          "completion": 28768
         },
         {
           "model": "o4-mini",
-          "prompt_fresh": 10276,
-          "cached": 39424,
-          "completion": 5992
+          "prompt_fresh": 29964,
+          "cached": 73600,
+          "completion": 17920
+        },
+        {
+          "model": "claude-opus-4",
+          "prompt_fresh": 114830,
+          "cached": 0,
+          "completion": 2592
+        },
+        {
+          "model": "claude-opus-4.1",
+          "prompt_fresh": 114158,
+          "cached": 0,
+          "completion": 2405
+        },
+        {
+          "model": "claude-opus-4.5",
+          "prompt_fresh": 107390,
+          "cached": 0,
+          "completion": 2570
         }
       ],
       "per_tool": {
-        "smiles_to_coordinate_file": 0.29,
-        "run_ase": 0.23,
-        "calculator": 0.02
+        "run_ase": 2.8,
+        "smiles_to_coordinate_file": 0.33,
+        "molecule_name_to_smiles": 0.11,
+        "extract_output_json": 0.04,
+        "calculator": 0.03
+      },
+      "time_breakdown": {
+        "LLM calls": 1589.48,
+        "Tool execution": 3.31,
+        "Other": 8.96
       }
     },
     "energy_from_name": {
-      "n_models": 31,
+      "n_models": 27,
       "n_passed": 17,
-      "eval_time_s": 1457.3,
+      "eval_time_s": 1977.9,
       "per_model": [
         {
-          "model": "gpt-4.1-nano",
-          "prompt_fresh": 57721,
-          "cached": 238720,
-          "completion": 3491
-        },
-        {
           "model": "claude-opus-4",
-          "prompt_fresh": 191564,
+          "prompt_fresh": 304779,
           "cached": 0,
-          "completion": 3695
-        },
-        {
-          "model": "claude-haiku-3.5",
-          "prompt_fresh": 184104,
-          "cached": 0,
-          "completion": 3551
-        },
-        {
-          "model": "claude-opus-4.1",
-          "prompt_fresh": 170135,
-          "cached": 0,
-          "completion": 3418
+          "completion": 5975
         },
         {
           "model": "claude-opus-4.6",
-          "prompt_fresh": 135048,
+          "prompt_fresh": 236617,
           "cached": 0,
-          "completion": 2439
+          "completion": 5136
+        },
+        {
+          "model": "claude-haiku-3.5",
+          "prompt_fresh": 230078,
+          "cached": 0,
+          "completion": 5543
         },
         {
           "model": "claude-opus-4.5",
-          "prompt_fresh": 134601,
+          "prompt_fresh": 227126,
           "cached": 0,
-          "completion": 2288
+          "completion": 4949
+        },
+        {
+          "model": "claude-opus-4.1",
+          "prompt_fresh": 222515,
+          "cached": 0,
+          "completion": 4605
+        },
+        {
+          "model": "claude-sonnet-4.5",
+          "prompt_fresh": 199603,
+          "cached": 0,
+          "completion": 4445
         },
         {
           "model": "claude-sonnet-4",
-          "prompt_fresh": 132551,
+          "prompt_fresh": 188633,
           "cached": 0,
-          "completion": 2566
-        },
-        {
-          "model": "o3",
-          "prompt_fresh": 23501,
-          "cached": 104448,
-          "completion": 5549
+          "completion": 4560
         },
         {
           "model": "claude-haiku-4.5",
-          "prompt_fresh": 118429,
+          "prompt_fresh": 181845,
           "cached": 0,
-          "completion": 2484
+          "completion": 4989
+        },
+        {
+          "model": "gpt-5.1",
+          "prompt_fresh": 47626,
+          "cached": 93568,
+          "completion": 8849
         },
         {
           "model": "o3-mini",
-          "prompt_fresh": 25885,
-          "cached": 81792,
-          "completion": 9015
+          "prompt_fresh": 29401,
+          "cached": 86400,
+          "completion": 12343
         }
       ],
       "per_tool": {
-        "molecule_name_to_smiles": 17.71,
-        "run_ase": 5.96,
-        "smiles_to_coordinate_file": 0.74,
-        "calculator": 0.0,
-        "extract_output_json": 0.0
+        "molecule_name_to_smiles": 19.73,
+        "run_ase": 4.44,
+        "smiles_to_coordinate_file": 0.53,
+        "extract_output_json": 0.03,
+        "calculator": 0.01
+      },
+      "time_breakdown": {
+        "LLM calls": 1941.35,
+        "Tool execution": 24.74,
+        "Other": 14.63
       }
     },
     "energy_from_smiles": {
-      "n_models": 31,
-      "n_passed": 19,
-      "eval_time_s": 603.7,
+      "n_models": 27,
+      "n_passed": 18,
+      "eval_time_s": 960.8,
       "per_model": [
         {
-          "model": "o1",
-          "prompt_fresh": 17871,
-          "cached": 46976,
-          "completion": 5808
-        },
-        {
-          "model": "gpt-4.1-nano",
-          "prompt_fresh": 14890,
-          "cached": 54272,
-          "completion": 971
-        },
-        {
-          "model": "claude-opus-4.1",
-          "prompt_fresh": 67708,
-          "cached": 0,
-          "completion": 1494
-        },
-        {
-          "model": "claude-opus-4",
-          "prompt_fresh": 67711,
-          "cached": 0,
-          "completion": 1455
-        },
-        {
           "model": "claude-haiku-3.5",
-          "prompt_fresh": 58392,
+          "prompt_fresh": 122029,
           "cached": 0,
-          "completion": 1241
-        },
-        {
-          "model": "o4-mini",
-          "prompt_fresh": 14589,
-          "cached": 34816,
-          "completion": 5246
-        },
-        {
-          "model": "o3-mini",
-          "prompt_fresh": 13517,
-          "cached": 36224,
-          "completion": 4026
-        },
-        {
-          "model": "claude-haiku-4.5",
-          "prompt_fresh": 51034,
-          "cached": 0,
-          "completion": 1181
-        },
-        {
-          "model": "claude-opus-4.5",
-          "prompt_fresh": 50957,
-          "cached": 0,
-          "completion": 1105
+          "completion": 2816
         },
         {
           "model": "claude-opus-4.6",
-          "prompt_fresh": 50871,
+          "prompt_fresh": 97789,
           "cached": 0,
-          "completion": 1076
+          "completion": 2419
+        },
+        {
+          "model": "claude-opus-4.1",
+          "prompt_fresh": 96277,
+          "cached": 0,
+          "completion": 2376
+        },
+        {
+          "model": "claude-opus-4",
+          "prompt_fresh": 96098,
+          "cached": 0,
+          "completion": 2343
+        },
+        {
+          "model": "claude-haiku-4.5",
+          "prompt_fresh": 80195,
+          "cached": 0,
+          "completion": 2116
+        },
+        {
+          "model": "claude-opus-4.5",
+          "prompt_fresh": 80117,
+          "cached": 0,
+          "completion": 2080
+        },
+        {
+          "model": "claude-sonnet-4",
+          "prompt_fresh": 79023,
+          "cached": 0,
+          "completion": 2138
+        },
+        {
+          "model": "claude-sonnet-4.5",
+          "prompt_fresh": 70462,
+          "cached": 0,
+          "completion": 1945
+        },
+        {
+          "model": "o1",
+          "prompt_fresh": 15745,
+          "cached": 46976,
+          "completion": 7740
+        },
+        {
+          "model": "o4-mini",
+          "prompt_fresh": 15728,
+          "cached": 46848,
+          "completion": 5742
         }
       ],
       "per_tool": {
-        "run_ase": 2.82,
-        "molecule_name_to_smiles": 0.66,
-        "smiles_to_coordinate_file": 0.35,
+        "run_ase": 3.03,
+        "smiles_to_coordinate_file": 0.31,
+        "molecule_name_to_smiles": 0.19,
+        "extract_output_json": 0.02,
         "calculator": 0.0
+      },
+      "time_breakdown": {
+        "LLM calls": 951.75,
+        "Tool execution": 3.56,
+        "Other": 7.39
       }
     },
     "optimization_from_name": {
-      "n_models": 31,
-      "n_passed": 16,
-      "eval_time_s": 1889.3,
+      "n_models": 27,
+      "n_passed": 19,
+      "eval_time_s": 3016.3,
       "per_model": [
         {
-          "model": "gpt-4.1-nano",
-          "prompt_fresh": 45738,
-          "cached": 212608,
-          "completion": 3364
-        },
-        {
-          "model": "claude-opus-4.1",
-          "prompt_fresh": 228557,
+          "model": "claude-haiku-3.5",
+          "prompt_fresh": 405743,
           "cached": 0,
-          "completion": 6150
+          "completion": 10714
         },
         {
           "model": "claude-opus-4",
-          "prompt_fresh": 228413,
+          "prompt_fresh": 343262,
           "cached": 0,
-          "completion": 5821
+          "completion": 8320
         },
         {
-          "model": "gpt-4.1-mini",
-          "prompt_fresh": 42311,
-          "cached": 148864,
-          "completion": 2404
-        },
-        {
-          "model": "claude-haiku-3.5",
-          "prompt_fresh": 181880,
+          "model": "claude-sonnet-4.5",
+          "prompt_fresh": 265609,
           "cached": 0,
-          "completion": 4239
+          "completion": 6885
         },
         {
           "model": "claude-opus-4.6",
-          "prompt_fresh": 179350,
+          "prompt_fresh": 231755,
           "cached": 0,
-          "completion": 5183
-        },
-        {
-          "model": "claude-sonnet-4",
-          "prompt_fresh": 143603,
-          "cached": 0,
-          "completion": 3286
-        },
-        {
-          "model": "o1",
-          "prompt_fresh": 29571,
-          "cached": 97024,
-          "completion": 12766
-        },
-        {
-          "model": "claude-haiku-4.5",
-          "prompt_fresh": 136104,
-          "cached": 0,
-          "completion": 2945
+          "completion": 7268
         },
         {
           "model": "claude-opus-4.5",
-          "prompt_fresh": 134985,
+          "prompt_fresh": 229895,
           "cached": 0,
-          "completion": 2424
+          "completion": 6534
+        },
+        {
+          "model": "claude-opus-4.1",
+          "prompt_fresh": 225369,
+          "cached": 0,
+          "completion": 6140
+        },
+        {
+          "model": "claude-sonnet-4",
+          "prompt_fresh": 215669,
+          "cached": 0,
+          "completion": 5093
+        },
+        {
+          "model": "claude-haiku-4.5",
+          "prompt_fresh": 194435,
+          "cached": 0,
+          "completion": 5935
+        },
+        {
+          "model": "o3-mini",
+          "prompt_fresh": 64602,
+          "cached": 98944,
+          "completion": 32733
+        },
+        {
+          "model": "gpt-5.2",
+          "prompt_fresh": 61272,
+          "cached": 115456,
+          "completion": 6922
         }
       ],
       "per_tool": {
-        "run_ase": 80.48,
-        "molecule_name_to_smiles": 14.68,
-        "smiles_to_coordinate_file": 2.57,
-        "extract_output_json": 0.01,
-        "calculator": 0.0
+        "run_ase": 95.18,
+        "molecule_name_to_smiles": 18.87,
+        "smiles_to_coordinate_file": 2.52,
+        "extract_output_json": 0.06,
+        "calculator": 0.01
+      },
+      "time_breakdown": {
+        "LLM calls": 2916.4,
+        "Tool execution": 116.64,
+        "Other": 45.97
       }
     },
     "optimization_from_smiles": {
-      "n_models": 31,
+      "n_models": 27,
       "n_passed": 19,
-      "eval_time_s": 635.3,
+      "eval_time_s": 1106.1,
       "per_model": [
         {
-          "model": "claude-opus-4",
-          "prompt_fresh": 99829,
-          "cached": 0,
-          "completion": 2541
-        },
-        {
-          "model": "claude-opus-4.1",
-          "prompt_fresh": 99805,
-          "cached": 0,
-          "completion": 2527
-        },
-        {
           "model": "claude-haiku-3.5",
-          "prompt_fresh": 63883,
+          "prompt_fresh": 111761,
           "cached": 0,
-          "completion": 1390
+          "completion": 3102
+        },
+        {
+          "model": "gpt-4.1-nano",
+          "prompt_fresh": 28390,
+          "cached": 73088,
+          "completion": 2119
         },
         {
           "model": "claude-opus-4.6",
-          "prompt_fresh": 61457,
+          "prompt_fresh": 99428,
           "cached": 0,
-          "completion": 1701
+          "completion": 3351
+        },
+        {
+          "model": "claude-sonnet-4.5",
+          "prompt_fresh": 99388,
+          "cached": 0,
+          "completion": 2910
+        },
+        {
+          "model": "claude-opus-4",
+          "prompt_fresh": 97284,
+          "cached": 0,
+          "completion": 2904
+        },
+        {
+          "model": "claude-opus-4.1",
+          "prompt_fresh": 97365,
+          "cached": 0,
+          "completion": 2817
         },
         {
           "model": "claude-sonnet-4",
-          "prompt_fresh": 60249,
+          "prompt_fresh": 87982,
           "cached": 0,
-          "completion": 1493
-        },
-        {
-          "model": "o3-mini",
-          "prompt_fresh": 12519,
-          "cached": 37888,
-          "completion": 5344
-        },
-        {
-          "model": "o1",
-          "prompt_fresh": 11406,
-          "cached": 38016,
-          "completion": 4965
-        },
-        {
-          "model": "claude-haiku-4.5",
-          "prompt_fresh": 51453,
-          "cached": 0,
-          "completion": 1357
+          "completion": 2479
         },
         {
           "model": "claude-opus-4.5",
-          "prompt_fresh": 51444,
+          "prompt_fresh": 81304,
           "cached": 0,
-          "completion": 1260
+          "completion": 2806
         },
         {
-          "model": "o3",
-          "prompt_fresh": 8808,
-          "cached": 34176,
-          "completion": 2251
+          "model": "claude-haiku-4.5",
+          "prompt_fresh": 80516,
+          "cached": 0,
+          "completion": 2476
+        },
+        {
+          "model": "o1",
+          "prompt_fresh": 21858,
+          "cached": 49024,
+          "completion": 9624
         }
       ],
       "per_tool": {
-        "run_ase": 7.49,
-        "molecule_name_to_smiles": 0.45,
-        "smiles_to_coordinate_file": 0.22,
-        "extract_output_json": 0.01,
-        "calculator": 0.0
+        "run_ase": 7.65,
+        "molecule_name_to_smiles": 0.35,
+        "smiles_to_coordinate_file": 0.25,
+        "extract_output_json": 0.02
+      },
+      "time_breakdown": {
+        "LLM calls": 1096.82,
+        "Tool execution": 8.26,
+        "Other": 7.38
       }
     },
     "reaction_energy": {
-      "n_models": 31,
+      "n_models": 27,
       "n_passed": 11,
-      "eval_time_s": 8901.8,
+      "eval_time_s": 8232.4,
       "per_model": [
         {
-          "model": "claude-opus-4",
-          "prompt_fresh": 1461796,
-          "cached": 0,
-          "completion": 21713
-        },
-        {
-          "model": "claude-haiku-3.5",
-          "prompt_fresh": 1358589,
-          "cached": 0,
-          "completion": 23739
-        },
-        {
-          "model": "claude-opus-4.1",
-          "prompt_fresh": 1319358,
-          "cached": 0,
-          "completion": 21030
-        },
-        {
-          "model": "claude-sonnet-4",
-          "prompt_fresh": 1276762,
-          "cached": 0,
-          "completion": 18695
-        },
-        {
-          "model": "o3",
-          "prompt_fresh": 158369,
-          "cached": 798464,
-          "completion": 56581
-        },
-        {
-          "model": "o4-mini",
-          "prompt_fresh": 143477,
-          "cached": 644224,
-          "completion": 111082
-        },
-        {
-          "model": "o1",
-          "prompt_fresh": 177273,
-          "cached": 559360,
-          "completion": 121740
-        },
-        {
           "model": "claude-opus-4.6",
-          "prompt_fresh": 713183,
+          "prompt_fresh": 2817319,
           "cached": 0,
-          "completion": 22012
+          "completion": 67617
         },
         {
           "model": "claude-opus-4.5",
-          "prompt_fresh": 641561,
+          "prompt_fresh": 1933986,
           "cached": 0,
-          "completion": 19065
+          "completion": 45820
+        },
+        {
+          "model": "claude-sonnet-4.5",
+          "prompt_fresh": 1820168,
+          "cached": 0,
+          "completion": 42359
+        },
+        {
+          "model": "claude-opus-4.1",
+          "prompt_fresh": 1820493,
+          "cached": 0,
+          "completion": 41816
+        },
+        {
+          "model": "claude-sonnet-4",
+          "prompt_fresh": 1795528,
+          "cached": 0,
+          "completion": 37246
+        },
+        {
+          "model": "claude-opus-4",
+          "prompt_fresh": 1649889,
+          "cached": 0,
+          "completion": 37133
+        },
+        {
+          "model": "claude-haiku-3.5",
+          "prompt_fresh": 1479561,
+          "cached": 0,
+          "completion": 32131
+        },
+        {
+          "model": "claude-haiku-4.5",
+          "prompt_fresh": 1351052,
+          "cached": 0,
+          "completion": 38355
+        },
+        {
+          "model": "o3",
+          "prompt_fresh": 436972,
+          "cached": 688000,
+          "completion": 72765
         },
         {
           "model": "gpt-4.1-nano",
-          "prompt_fresh": 93812,
-          "cached": 513536,
-          "completion": 10292
+          "prompt_fresh": 307503,
+          "cached": 753536,
+          "completion": 21351
         }
       ],
       "per_tool": {
-        "run_ase": 971.1,
-        "molecule_name_to_smiles": 138.92,
-        "smiles_to_coordinate_file": 9.08,
-        "calculator": 0.08
+        "run_ase": 978.44,
+        "molecule_name_to_smiles": 156.16,
+        "smiles_to_coordinate_file": 4.75,
+        "extract_output_json": 0.32,
+        "calculator": 0.0
+      },
+      "time_breakdown": {
+        "LLM calls": 15071.95,
+        "Tool execution": 1139.67,
+        "Other": 50.86
       }
     },
     "thermochemistry_from_name": {
-      "n_models": 31,
-      "n_passed": 15,
-      "eval_time_s": 1845.5,
+      "n_models": 27,
+      "n_passed": 14,
+      "eval_time_s": 2711.4,
       "per_model": [
         {
-          "model": "gpt-4.1-nano",
-          "prompt_fresh": 46470,
-          "cached": 402944,
-          "completion": 4893
-        },
-        {
           "model": "claude-opus-4.6",
-          "prompt_fresh": 202561,
+          "prompt_fresh": 400882,
           "cached": 0,
-          "completion": 4650
+          "completion": 10409
         },
         {
-          "model": "claude-haiku-3.5",
-          "prompt_fresh": 173077,
+          "model": "claude-sonnet-4.5",
+          "prompt_fresh": 331845,
           "cached": 0,
-          "completion": 4202
+          "completion": 7471
         },
         {
           "model": "claude-opus-4.1",
-          "prompt_fresh": 172560,
+          "prompt_fresh": 294815,
           "cached": 0,
-          "completion": 4162
-        },
-        {
-          "model": "claude-opus-4",
-          "prompt_fresh": 172355,
-          "cached": 0,
-          "completion": 4041
-        },
-        {
-          "model": "o3",
-          "prompt_fresh": 27651,
-          "cached": 116992,
-          "completion": 8980
-        },
-        {
-          "model": "claude-haiku-4.5",
-          "prompt_fresh": 137257,
-          "cached": 0,
-          "completion": 3397
+          "completion": 7371
         },
         {
           "model": "claude-opus-4.5",
-          "prompt_fresh": 136127,
+          "prompt_fresh": 289943,
           "cached": 0,
-          "completion": 2911
+          "completion": 8053
+        },
+        {
+          "model": "claude-opus-4",
+          "prompt_fresh": 262176,
+          "cached": 0,
+          "completion": 6463
+        },
+        {
+          "model": "claude-haiku-4.5",
+          "prompt_fresh": 253713,
+          "cached": 0,
+          "completion": 8004
         },
         {
           "model": "claude-sonnet-4",
-          "prompt_fresh": 134568,
+          "prompt_fresh": 232529,
           "cached": 0,
-          "completion": 3240
+          "completion": 5935
+        },
+        {
+          "model": "gpt-4.1-nano",
+          "prompt_fresh": 41267,
+          "cached": 173696,
+          "completion": 5298
+        },
+        {
+          "model": "claude-haiku-3.5",
+          "prompt_fresh": 206986,
+          "cached": 0,
+          "completion": 5746
         },
         {
           "model": "o1",
-          "prompt_fresh": 26001,
-          "cached": 76416,
-          "completion": 20135
+          "prompt_fresh": 50845,
+          "cached": 83328,
+          "completion": 38506
         }
       ],
       "per_tool": {
-        "run_ase": 50.69,
-        "molecule_name_to_smiles": 16.19,
-        "smiles_to_coordinate_file": 0.79,
-        "extract_output_json": 0.01,
-        "calculator": 0.01
+        "run_ase": 52.73,
+        "molecule_name_to_smiles": 23.21,
+        "smiles_to_coordinate_file": 0.72,
+        "extract_output_json": 0.04,
+        "calculator": 0.02
+      },
+      "time_breakdown": {
+        "LLM calls": 2651.02,
+        "Tool execution": 76.71,
+        "Other": 17.3
       }
     },
     "thermochemistry_from_smiles": {
-      "n_models": 31,
-      "n_passed": 18,
-      "eval_time_s": 787.9,
+      "n_models": 27,
+      "n_passed": 17,
+      "eval_time_s": 1194.5,
       "per_model": [
         {
+          "model": "claude-opus-4.1",
+          "prompt_fresh": 219646,
+          "cached": 0,
+          "completion": 4871
+        },
+        {
           "model": "gpt-4.1-nano",
-          "prompt_fresh": 46192,
-          "cached": 245248,
-          "completion": 4093
+          "prompt_fresh": 33019,
+          "cached": 91648,
+          "completion": 2852
         },
         {
           "model": "claude-opus-4",
-          "prompt_fresh": 68917,
+          "prompt_fresh": 121284,
           "cached": 0,
-          "completion": 1787
-        },
-        {
-          "model": "claude-opus-4.1",
-          "prompt_fresh": 68849,
-          "cached": 0,
-          "completion": 1787
-        },
-        {
-          "model": "o3",
-          "prompt_fresh": 12805,
-          "cached": 51968,
-          "completion": 4694
-        },
-        {
-          "model": "o1",
-          "prompt_fresh": 13232,
-          "cached": 37376,
-          "completion": 10151
-        },
-        {
-          "model": "claude-haiku-4.5",
-          "prompt_fresh": 51818,
-          "cached": 0,
-          "completion": 1454
-        },
-        {
-          "model": "claude-opus-4.5",
-          "prompt_fresh": 51821,
-          "cached": 0,
-          "completion": 1413
+          "completion": 3197
         },
         {
           "model": "claude-opus-4.6",
-          "prompt_fresh": 51826,
+          "prompt_fresh": 104279,
           "cached": 0,
-          "completion": 1368
+          "completion": 3229
         },
         {
           "model": "claude-sonnet-4",
-          "prompt_fresh": 50999,
+          "prompt_fresh": 101175,
           "cached": 0,
-          "completion": 1408
+          "completion": 2913
         },
         {
-          "model": "gpt-5.4",
-          "prompt_fresh": 10798,
-          "cached": 39680,
-          "completion": 774
-        }
-      ],
-      "per_tool": {
-        "run_ase": 12.46,
-        "smiles_to_coordinate_file": 0.38,
-        "calculator": 0.0,
-        "extract_output_json": 0.0
-      }
-    },
-    "vibrations_from_name": {
-      "n_models": 31,
-      "n_passed": 12,
-      "eval_time_s": 952.4,
-      "per_model": [
+          "model": "claude-opus-4.5",
+          "prompt_fresh": 94160,
+          "cached": 0,
+          "completion": 2704
+        },
         {
-          "model": "gpt-4.1-nano",
-          "prompt_fresh": 25621,
-          "cached": 116864,
-          "completion": 1787
+          "model": "claude-haiku-4.5",
+          "prompt_fresh": 87833,
+          "cached": 0,
+          "completion": 3413
         },
         {
           "model": "claude-haiku-3.5",
-          "prompt_fresh": 117391,
+          "prompt_fresh": 83090,
           "cached": 0,
-          "completion": 2710
+          "completion": 2015
         },
         {
-          "model": "claude-opus-4",
-          "prompt_fresh": 87659,
+          "model": "claude-sonnet-4.5",
+          "prompt_fresh": 82372,
           "cached": 0,
-          "completion": 2908
+          "completion": 2648
         },
         {
-          "model": "claude-opus-4.1",
-          "prompt_fresh": 87275,
-          "cached": 0,
-          "completion": 2762
-        },
-        {
-          "model": "o1",
-          "prompt_fresh": 16260,
-          "cached": 48384,
-          "completion": 9421
-        },
-        {
-          "model": "claude-opus-4.6",
-          "prompt_fresh": 70069,
-          "cached": 0,
-          "completion": 2522
-        },
-        {
-          "model": "claude-haiku-4.5",
-          "prompt_fresh": 69948,
-          "cached": 0,
-          "completion": 2402
-        },
-        {
-          "model": "claude-opus-4.5",
-          "prompt_fresh": 69735,
-          "cached": 0,
-          "completion": 2171
-        },
-        {
-          "model": "claude-sonnet-4",
-          "prompt_fresh": 68660,
-          "cached": 0,
-          "completion": 2467
-        },
-        {
-          "model": "o4-mini",
-          "prompt_fresh": 12381,
-          "cached": 39168,
-          "completion": 8438
+          "model": "gpt-5.4",
+          "prompt_fresh": 25709,
+          "cached": 40960,
+          "completion": 3746
         }
       ],
       "per_tool": {
-        "run_ase": 25.18,
-        "molecule_name_to_smiles": 7.54,
-        "smiles_to_coordinate_file": 0.41
+        "run_ase": 9.04,
+        "molecule_name_to_smiles": 2.26,
+        "smiles_to_coordinate_file": 0.38,
+        "extract_output_json": 0.02,
+        "calculator": 0.0
+      },
+      "time_breakdown": {
+        "LLM calls": 1177.69,
+        "Tool execution": 11.7,
+        "Other": 5.82
+      }
+    },
+    "vibrations_from_name": {
+      "n_models": 27,
+      "n_passed": 16,
+      "eval_time_s": 1505.1,
+      "per_model": [
+        {
+          "model": "claude-opus-4",
+          "prompt_fresh": 168674,
+          "cached": 0,
+          "completion": 4740
+        },
+        {
+          "model": "claude-opus-4.6",
+          "prompt_fresh": 160186,
+          "cached": 0,
+          "completion": 5374
+        },
+        {
+          "model": "claude-opus-4.5",
+          "prompt_fresh": 150083,
+          "cached": 0,
+          "completion": 4562
+        },
+        {
+          "model": "claude-sonnet-4.5",
+          "prompt_fresh": 149916,
+          "cached": 0,
+          "completion": 4564
+        },
+        {
+          "model": "claude-haiku-4.5",
+          "prompt_fresh": 118152,
+          "cached": 0,
+          "completion": 4349
+        },
+        {
+          "model": "claude-sonnet-4",
+          "prompt_fresh": 118815,
+          "cached": 0,
+          "completion": 3322
+        },
+        {
+          "model": "claude-haiku-3.5",
+          "prompt_fresh": 112824,
+          "cached": 0,
+          "completion": 3353
+        },
+        {
+          "model": "claude-opus-4.1",
+          "prompt_fresh": 106138,
+          "cached": 0,
+          "completion": 3485
+        },
+        {
+          "model": "o3",
+          "prompt_fresh": 24717,
+          "cached": 57984,
+          "completion": 7322
+        },
+        {
+          "model": "gpt-5.4",
+          "prompt_fresh": 27728,
+          "cached": 53504,
+          "completion": 4077
+        }
+      ],
+      "per_tool": {
+        "run_ase": 24.88,
+        "molecule_name_to_smiles": 17.82,
+        "smiles_to_coordinate_file": 0.34,
+        "extract_output_json": 0.02,
+        "calculator": 0.0
+      },
+      "time_breakdown": {
+        "LLM calls": 1485.86,
+        "Tool execution": 43.07,
+        "Other": 9.49
       }
     },
     "vibrations_from_smiles": {
-      "n_models": 31,
-      "n_passed": 18,
-      "eval_time_s": 864.8,
+      "n_models": 27,
+      "n_passed": 14,
+      "eval_time_s": 1440.4,
       "per_model": [
         {
-          "model": "claude-haiku-4.5",
-          "prompt_fresh": 71017,
-          "cached": 0,
-          "completion": 2494
-        },
-        {
-          "model": "claude-opus-4.1",
-          "prompt_fresh": 69986,
-          "cached": 0,
-          "completion": 2656
-        },
-        {
-          "model": "claude-opus-4",
-          "prompt_fresh": 70004,
-          "cached": 0,
-          "completion": 2495
-        },
-        {
-          "model": "o1",
-          "prompt_fresh": 11714,
-          "cached": 39552,
-          "completion": 9899
-        },
-        {
-          "model": "o3-mini",
-          "prompt_fresh": 15570,
-          "cached": 35968,
-          "completion": 7770
-        },
-        {
-          "model": "claude-opus-4.5",
-          "prompt_fresh": 53053,
-          "cached": 0,
-          "completion": 2302
-        },
-        {
-          "model": "gpt-4.1-mini",
-          "prompt_fresh": 16758,
-          "cached": 37376,
-          "completion": 1141
-        },
-        {
           "model": "claude-opus-4.6",
-          "prompt_fresh": 52763,
+          "prompt_fresh": 177946,
           "cached": 0,
-          "completion": 2133
+          "completion": 5467
         },
         {
           "model": "claude-sonnet-4",
-          "prompt_fresh": 51730,
+          "prompt_fresh": 143740,
           "cached": 0,
-          "completion": 2034
+          "completion": 4526
         },
         {
-          "model": "gpt-4.1-nano",
-          "prompt_fresh": 12474,
-          "cached": 39936,
-          "completion": 1022
+          "model": "claude-opus-4",
+          "prompt_fresh": 140723,
+          "cached": 0,
+          "completion": 4488
+        },
+        {
+          "model": "claude-haiku-3.5",
+          "prompt_fresh": 138616,
+          "cached": 0,
+          "completion": 4344
+        },
+        {
+          "model": "claude-sonnet-4.5",
+          "prompt_fresh": 123690,
+          "cached": 0,
+          "completion": 4348
+        },
+        {
+          "model": "claude-opus-4.5",
+          "prompt_fresh": 123032,
+          "cached": 0,
+          "completion": 4466
+        },
+        {
+          "model": "claude-opus-4.1",
+          "prompt_fresh": 120596,
+          "cached": 0,
+          "completion": 3938
+        },
+        {
+          "model": "o3",
+          "prompt_fresh": 27028,
+          "cached": 59264,
+          "completion": 8793
+        },
+        {
+          "model": "o4-mini",
+          "prompt_fresh": 20659,
+          "cached": 47360,
+          "completion": 13453
+        },
+        {
+          "model": "gpt-5.2",
+          "prompt_fresh": 22099,
+          "cached": 42368,
+          "completion": 2762
         }
       ],
       "per_tool": {
-        "run_ase": 36.16,
-        "smiles_to_coordinate_file": 0.28,
-        "molecule_name_to_smiles": 0.2,
-        "extract_output_json": 0.0
+        "run_ase": 43.47,
+        "smiles_to_coordinate_file": 0.25,
+        "molecule_name_to_smiles": 0.19,
+        "extract_output_json": 0.02
+      },
+      "time_breakdown": {
+        "LLM calls": 1405.55,
+        "Tool execution": 43.93,
+        "Other": 11.39
       }
     }
   },
   "overall": {
-    "n_models": 31,
-    "n_passed": 16,
-    "eval_time_s": 20404.3,
+    "n_models": 47,
+    "n_passed": 15,
+    "eval_time_s": 26034.5,
     "per_model": [
       {
-        "model": "claude-opus-4",
-        "prompt_fresh": 2730810,
-        "cached": 0,
-        "completion": 51830
-      },
-      {
-        "model": "claude-opus-4.1",
-        "prompt_fresh": 2574811,
-        "cached": 0,
-        "completion": 51190
-      },
-      {
-        "model": "claude-haiku-3.5",
-        "prompt_fresh": 2345809,
-        "cached": 0,
-        "completion": 44987
-      },
-      {
-        "model": "gpt-4.1-nano",
-        "prompt_fresh": 342918,
-        "cached": 1824128,
-        "completion": 29913
-      },
-      {
-        "model": "claude-sonnet-4",
-        "prompt_fresh": 2129331,
-        "cached": 0,
-        "completion": 39614
-      },
-      {
         "model": "claude-opus-4.6",
-        "prompt_fresh": 1761477,
+        "prompt_fresh": 4936496,
         "cached": 0,
-        "completion": 47475
+        "completion": 124928
       },
       {
         "model": "claude-opus-4.5",
-        "prompt_fresh": 1537056,
+        "prompt_fresh": 3534866,
         "cached": 0,
-        "completion": 38507
+        "completion": 89316
+      },
+      {
+        "model": "claude-opus-4.1",
+        "prompt_fresh": 3535803,
+        "cached": 0,
+        "completion": 84091
+      },
+      {
+        "model": "claude-opus-4",
+        "prompt_fresh": 3480637,
+        "cached": 0,
+        "completion": 81963
+      },
+      {
+        "model": "claude-sonnet-4",
+        "prompt_fresh": 3343853,
+        "cached": 0,
+        "completion": 76835
+      },
+      {
+        "model": "claude-sonnet-4.5",
+        "prompt_fresh": 3326885,
+        "cached": 0,
+        "completion": 82165
+      },
+      {
+        "model": "claude-haiku-3.5",
+        "prompt_fresh": 3104448,
+        "cached": 0,
+        "completion": 74355
+      },
+      {
+        "model": "claude-haiku-4.5",
+        "prompt_fresh": 2689750,
+        "cached": 0,
+        "completion": 78578
+      },
+      {
+        "model": "gpt-4.1-nano",
+        "prompt_fresh": 478022,
+        "cached": 1273856,
+        "completion": 37454
       },
       {
         "model": "o3",
-        "prompt_fresh": 259068,
-        "cached": 1223168,
-        "completion": 89804
-      },
-      {
-        "model": "o1",
-        "prompt_fresh": 344141,
-        "cached": 1012480,
-        "completion": 209404
-      },
-      {
-        "model": "o4-mini",
-        "prompt_fresh": 193930,
-        "cached": 791168,
-        "completion": 132924
+        "prompt_fresh": 522852,
+        "cached": 901120,
+        "completion": 102959
       }
     ],
     "per_tool": {
-      "run_ase": 1192.81,
-      "molecule_name_to_smiles": 223.37,
-      "smiles_to_coordinate_file": 15.39,
-      "calculator": 0.13,
-      "extract_output_json": 0.04
+      "run_ase": 1222.19,
+      "molecule_name_to_smiles": 252.37,
+      "smiles_to_coordinate_file": 10.67,
+      "extract_output_json": 0.63,
+      "calculator": 0.1
+    },
+    "time_breakdown": {
+      "LLM calls": 32550.38,
+      "Tool execution": 1485.96,
+      "Other": 191.43
     }
   }
 }

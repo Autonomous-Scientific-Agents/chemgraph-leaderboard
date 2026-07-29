@@ -244,28 +244,44 @@ def _annular_sector(cx: float, cy: float, ro: float, ri: float,
     )
 
 
-def _tool_pie_svg(per_tool: Dict[str, Any], uid: str) -> str:
-    items = [(k, float(v)) for k, v in (per_tool or {}).items() if float(v) > 0]
+# Time-composition donut palette — deliberately distinct from _PIE_COLORS so a
+# blue "LLM calls" slice is never confused with the blue "run_ase" slice next to it.
+_TIME_COLORS = ["#6366f1", "#0891b2", "#f59e0b", "#94a3b8"]
+
+
+def _fmt_secs(v: float) -> str:
+    """Short duration for legends: '4.8s' when small, '16m 18s' / '4h 11m' when big."""
+    v = float(v)
+    return f"{v:.1f}s" if v < 100 else _fmt_dur(v)
+
+
+def _donut_svg(items_dict: Dict[str, Any], center_sub: str, *,
+               colors: Optional[List[str]] = None,
+               label_map: Optional[Dict[str, str]] = None,
+               size: int = 150) -> str:
+    """Generic donut + legend. ``items_dict`` maps label -> value (seconds)."""
+    colors = colors or _PIE_COLORS
+    label_map = label_map or {}
+    items = [(k, float(v)) for k, v in (items_dict or {}).items() if float(v) > 0]
     items.sort(key=lambda kv: -kv[1])
     total = sum(v for _, v in items)
     if not items or total <= 0:
-        return "<div class='cg-chart-empty'>No tool-timing data.</div>"
+        return "<div class='cg-chart-empty'>No timing data.</div>"
 
-    S, R_OUT, R_IN = 200, 92, 54
-    cx = cy = S / 2
+    R_OUT, R_IN = size * 0.46, size * 0.28
+    cx = cy = size / 2
     svg = [
-        f"<svg class='cg-pie-svg' viewBox='0 0 {S} {S}' width='{S}' height='{S}' "
-        f"role='img' xmlns='http://www.w3.org/2000/svg'>"
+        f"<svg class='cg-pie-svg' viewBox='0 0 {size} {size}' width='{size}' "
+        f"height='{size}' role='img' xmlns='http://www.w3.org/2000/svg'>"
     ]
     acc = 0.0
-    for idx, (tool, val) in enumerate(items):
-        color = _PIE_COLORS[idx % len(_PIE_COLORS)]
+    for idx, (key, val) in enumerate(items):
+        color = colors[idx % len(colors)]
         frac = val / total
-        a0 = acc * 360
-        a1 = (acc + frac) * 360
+        a0, a1 = acc * 360, (acc + frac) * 360
         acc += frac
-        label = _TOOL_LABELS.get(tool, tool)
-        title = f"<title>{_esc(label)}: {val:.1f}s ({frac * 100:.0f}%)</title>"
+        label = label_map.get(key, key)
+        title = f"<title>{_esc(label)}: {_fmt_secs(val)} ({frac * 100:.0f}%)</title>"
         if frac >= 0.999:  # single slice → full ring
             rmid = (R_OUT + R_IN) / 2
             svg.append(
@@ -277,32 +293,42 @@ def _tool_pie_svg(per_tool: Dict[str, Any], uid: str) -> str:
                 f"<path d='{_annular_sector(cx, cy, R_OUT, R_IN, a0, a1)}' "
                 f"fill='{color}'>{title}</path>"
             )
-    # centre total
     svg.append(
-        f"<text x='{cx}' y='{cy - 4}' font-size='19' font-weight='700' "
+        f"<text x='{cx}' y='{cy - 2}' font-size='15' font-weight='700' "
         "fill='var(--cg-text-primary, #0f172a)' text-anchor='middle'>"
         f"{_fmt_dur(total)}</text>"
     )
     svg.append(
-        f"<text x='{cx}' y='{cy + 15}' font-size='10.5' "
-        "fill='var(--cg-text-muted, #94a3b8)' text-anchor='middle'>tool time</text>"
+        f"<text x='{cx}' y='{cy + 12}' font-size='9' "
+        "fill='var(--cg-text-muted, #94a3b8)' text-anchor='middle'>"
+        f"{_esc(center_sub)}</text>"
     )
     svg.append("</svg>")
 
-    legend_rows = []
-    for idx, (tool, val) in enumerate(items):
-        color = _PIE_COLORS[idx % len(_PIE_COLORS)]
-        label = _TOOL_LABELS.get(tool, tool)
+    rows = []
+    for idx, (key, val) in enumerate(items):
+        color = colors[idx % len(colors)]
+        label = label_map.get(key, key)
         pct = val / total * 100
-        legend_rows.append(
+        rows.append(
             "<li class='cg-pie-li'>"
             f"<span class='cg-sw' style='background:{color}'></span>"
             f"<span class='cg-pie-name'>{_esc(label)}</span>"
-            f"<span class='cg-pie-val'>{val:.1f}s · {pct:.0f}%</span>"
+            f"<span class='cg-pie-val'>{_fmt_secs(val)} · {pct:.0f}%</span>"
             "</li>"
         )
-    legend = "<ul class='cg-pie-legend'>" + "".join(legend_rows) + "</ul>"
+    legend = "<ul class='cg-pie-legend'>" + "".join(rows) + "</ul>"
     return f"<div class='cg-pie-wrap'>{''.join(svg)}{legend}</div>"
+
+
+def _tool_pie_svg(per_tool: Dict[str, Any]) -> str:
+    """Donut of execution time per agent tool (run_ase, name→SMILES, ...)."""
+    return _donut_svg(per_tool, "tool time", label_map=_TOOL_LABELS)
+
+
+def _time_pie_svg(time_breakdown: Dict[str, Any]) -> str:
+    """Donut of agent wall time split into LLM calls vs tool execution vs other."""
+    return _donut_svg(time_breakdown, "agent time", colors=_TIME_COLORS)
 
 
 # --------------------------------------------------------------------------- #
@@ -315,8 +341,9 @@ def render_task_charts(task: Dict[str, Any]) -> str:
         return ""
     uid = re.sub(r"[^a-z0-9]+", "", (task.get("name") or cat or "x").lower())[:24] or "x"
 
+    wf = (load_sample_metrics().get("workflow") or "").replace("_", "-") or "prior"
     note = (
-        "<div class='cg-charts-note'>Demo data from a prior single-agent run · "
+        f"<div class='cg-charts-note'>Demo data from a prior {_esc(wf)} run · "
         f"category <b>{_esc(cat)}</b></div>"
     )
     body = (
@@ -327,10 +354,18 @@ def render_task_charts(task: Dict[str, Any]) -> str:
         "<div class='cg-chart-title'>Token consumption by model</div>"
         + _token_stack_svg(payload.get("per_model") or [], uid)
         + "</div>"
-        "<div class='cg-chart-block cg-chart-pie'>"
-        "<div class='cg-chart-title'>Execution time by tool</div>"
-        + _tool_pie_svg(payload.get("per_tool") or {}, uid)
+        # Right column: two donuts stacked — time split (LLM vs tools) on top,
+        # per-tool breakdown below — so the column fills the token bar's height.
+        "<div class='cg-chart-pie-col'>"
+        "<div class='cg-chart-block'>"
+        "<div class='cg-chart-title'>Time split: LLM vs tools</div>"
+        + _time_pie_svg(payload.get("time_breakdown") or {})
         + "</div>"
+        "<div class='cg-chart-block'>"
+        "<div class='cg-chart-title'>Execution time by tool</div>"
+        + _tool_pie_svg(payload.get("per_tool") or {})
+        + "</div>"
+        "</div>"
         "</div>"
     )
     return (

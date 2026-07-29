@@ -1125,8 +1125,15 @@ custom_css = """
     margin-top: 1rem;
 }
 .cg-charts-row .cg-chart-block { margin-top: 0; }
-.cg-chart-bar { flex: 2 1 360px; min-width: 0; }
-.cg-chart-pie { flex: 1 1 260px; min-width: 0; }
+.cg-chart-bar { flex: 1.6 1 340px; min-width: 0; }
+/* Right column holding the two stacked donuts (time split + per-tool). */
+.cg-chart-pie-col {
+    flex: 1 1 300px;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
 .cg-chart-title {
     font-size: 0.85rem;
     font-weight: 700;
@@ -1162,26 +1169,27 @@ custom_css = """
     background-blend-mode: normal;
 }
 .cg-token-svg { display: block; max-width: 760px; }
-/* donut + legend */
+/* donut + legend (compact — two of these stack in the right column) */
 .cg-pie-wrap {
     display: flex;
     align-items: center;
     flex-wrap: wrap;
-    gap: 0.4rem 1.5rem;
+    gap: 0.3rem 0.9rem;
 }
 .cg-pie-svg { flex: 0 0 auto; }
 .cg-pie-legend {
     list-style: none;
     margin: 0;
     padding: 0;
-    min-width: 200px;
+    flex: 1 1 130px;
+    min-width: 120px;
 }
 .cg-pie-li {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
-    font-size: 0.8rem;
-    padding: 0.16rem 0;
+    gap: 0.45rem;
+    font-size: 0.73rem;
+    padding: 0.11rem 0;
     color: var(--cg-text-secondary);
 }
 .cg-pie-name { flex: 1 1 auto; }
