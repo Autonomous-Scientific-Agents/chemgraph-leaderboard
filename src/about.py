@@ -67,7 +67,6 @@ TITLE = f"""
         <div class="cg-badge-row">
             <span class="cg-badge">40 Queries</span>
             <span class="cg-badge">12 Categories</span>
-            <span class="cg-badge">Daily Evaluation</span>
             <span class="cg-badge">Single &amp; Multi-Agent</span>
         </div>
     </div>
@@ -78,7 +77,7 @@ TITLE = f"""
 INTRODUCTION_TEXT = """
 ChemGraph Leaderboard provides a reproducible evaluation of **agentic AI frameworks and large language models (LLMs)** for computational chemistry and materials science.
 
-Models are evaluated daily on **40 chemistry queries** grouped into **12 task categories**:
+Models are evaluated on **40 chemistry queries** grouped into **12 task categories**:
 
 | Category | Queries | Description |
 |----------|---------|-------------|
@@ -121,7 +120,7 @@ Both workflows are evaluated on the same 12 task categories and scored identical
 a structured judge scores each answer as correct or incorrect (binary accuracy with 5%
 relative tolerance for numerical values).
 
-Results are updated daily via an automated pipeline that:
+Results are updated via an automated pipeline that:
 1. Runs `chemgraph-eval` against all configured models for both workflows
 2. Transforms the benchmark results into leaderboard format
 3. Pushes updated results to the HF Hub datasets
