@@ -251,6 +251,27 @@ def add_new_task(
     }
     (root / "submission.json").write_text(json.dumps(submission, indent=2) + "\n")
 
+    # PR description: surface the key info + the query so a maintainer can assess
+    # the submission straight from the PR page (full bundle is in the PR files).
+    # Widen the code fence if the query itself contains a ``` run.
+    q = query.strip()
+    fence = "```"
+    while fence in q:
+        fence += "`"
+    org_suffix = f" ({submission['organization']})" if submission["organization"] else ""
+    tools_line = ", ".join(tool_list) if tool_list else "—"
+    desc = (notes or "").strip()  # the form's "Description" field
+    desc_block = f"### Description\n\n{desc}\n\n" if desc else ""
+    pr_description = (
+        f"**Submitter:** {submission['submitter']}{org_suffix}\n"
+        f"**Category:** {category}\n"
+        f"**Tools:** {tools_line}\n\n"
+        f"{desc_block}"
+        f"### Query\n\n{fence}\n{q}\n{fence}\n\n"
+        "---\n"
+        "_Full task bundle (ground truth, solve.py, solve.sh, task.toml) is in the files of this PR._"
+    )
+
     # --- open a pull request with the whole bundle (not a direct commit to
     #     main) so a maintainer reviews it before it's added. ---
     try:
@@ -260,6 +281,7 @@ def add_new_task(
             repo_id=TASKS_REPO,
             repo_type="dataset",
             commit_message=f"Add community task: {slug}",
+            commit_description=pr_description,
             create_pr=True,
         )
     except Exception as exc:
@@ -354,8 +376,10 @@ def get_submitted_tasks() -> List[Dict[str, Any]]:
 
     Returns a list of ``{"name", "tools", "status"}`` dicts. Never raises — on
     any network/repo error it returns whatever it managed to gather (possibly
-    empty). Merged tasks (on ``main``) are reported as ``done``; open PRs report
-    the stage recorded in their own ``submission.json``.
+    empty). Merged tasks (on ``main``) are reported as ``done``. In-flight PRs
+    are staged from their PR state: a ``draft`` PR is ``under_review``; a
+    published (``open``) PR is at least ``under_validation``, and a later
+    backend step may advance the stage recorded in its ``submission.json``.
     """
     tasks: List[Dict[str, Any]] = []
     merged_slugs: set[str] = set()
@@ -389,13 +413,19 @@ def get_submitted_tasks() -> List[Dict[str, Any]]:
                 }
             )
 
-    # --- open PRs -> their current in-flight stage ---
+    # --- in-flight PRs (draft/open) -> their current stage ---
     try:
         discussions = list(API.get_repo_discussions(repo_id=TASKS_REPO, repo_type="dataset"))
     except Exception:
         discussions = []
     for disc in discussions:
-        if not (getattr(disc, "is_pull_request", False) and disc.status == "open"):
+        # Submissions arrive as PRs. A freshly-created PR is "draft" (still
+        # under review); publishing it (draft -> open) advances it to
+        # validation. Closed PRs are dropped here; merged ones already live on
+        # main and were reported as "done" above.
+        if not getattr(disc, "is_pull_request", False):
+            continue
+        if disc.status not in ("draft", "open"):
             continue
         # Submission PR titles are "Add community task: <slug>".
         title = disc.title or ""
@@ -404,11 +434,22 @@ def get_submitted_tasks() -> List[Dict[str, Any]]:
             continue
         merged_slugs.add(slug)  # de-dupe across multiple PRs for the same slug
         data = _read_submission_json(f"{slug}/submission.json", revision=f"refs/pr/{disc.num}") or {}
+        if disc.status == "draft":
+            # Draft == not yet published == still under review.
+            status = "under_review"
+        else:
+            # Published (open). Clicking "publish" on HF runs none of our code,
+            # so submission.json still says "under_review" at this point —
+            # treat a published PR as at least under_validation. A later backend
+            # step writes under_evaluation (etc.) into submission.json, and we
+            # honor that once it's there.
+            recorded = _normalize_status(data.get("status"))
+            status = "under_validation" if recorded == "under_review" else recorded
         tasks.append(
             {
                 "name": data.get("title") or slug,
                 "tools": data.get("tools") or [],
-                "status": _normalize_status(data.get("status")),
+                "status": status,
                 "result": None,
                 "submitter": data.get("submitter") or data.get("organization") or "",
                 "submitted_time": data.get("submitted_time") or "",
