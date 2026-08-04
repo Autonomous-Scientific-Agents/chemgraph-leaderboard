@@ -1,0 +1,19 @@
+{
+  "_meta": {
+    "n_queries": 40,
+    "single_total": "measured (ALCF vLLM usage field)",
+    "multi_total": "estimated (deduped per-query x 40)",
+    "source": "/home/zhye/alcf/IE_Eval/plot_tokens.py",
+    "note": "tokens_per_query = <workflow>_total / n_queries"
+  },
+  "models": {
+    "nvidia/nemotron-3-super-120b":              {"single_total": 2579972, "multi_total": 2481240},
+    "openai/gpt-oss-120b":                       {"single_total": 1508840, "multi_total": 1593400},
+    "openai/gpt-oss-20b":                        {"single_total": 1220894, "multi_total": 2707280},
+    "meta-llama/Llama-3.3-70B-Instruct":         {"single_total": 1839518, "multi_total": 4178160},
+    "meta-llama/Llama-4-Scout-17B-16E-Instruct": {"single_total": 775422,  "multi_total": 3768880},
+    "google/gemma-4-E4B-it":                     {"single_total": 666111,  "multi_total": 1181000},
+    "google/gemma-4-31B-it":                     {"single_total": 528313,  "multi_total": 4825080},
+    "google/gemma-4-26B-A4B-it":                 {"single_total": 814381,  "multi_total": null}
+  }
+}

@@ -17,6 +17,7 @@ from src.about import (
     INTRODUCTION_TEXT,
     LLM_BENCHMARKS_TEXT,
     TITLE,
+    Tasks,
 )
 from src.display.css_html_js import custom_css, group_columns_head
 from src.display.utils import (
@@ -37,6 +38,7 @@ from src.envs import (
     QUEUE_REPO,
     REPO_ID,
     RESULTS_REPO,
+    TASKS_REPO,
     TOKEN,
     WORKFLOWS,
     get_eval_results_path,
@@ -53,6 +55,7 @@ from src.populate import (
     get_combined_trend_summary_df,
 )
 from src.submission.submit import add_new_eval
+from src.submission.submit_task import add_new_task, build_task_status_view
 
 # --local flag: skip HF Hub downloads and scheduler, use local data only.
 LOCAL_MODE = "--local" in sys.argv
@@ -684,11 +687,25 @@ def _task_col_names() -> list[str]:
 
 _AVERAGE_COL = "Average ⬆️"
 _HARDEST_TASK = "Reaction Energy"  # weight-10, historically lowest-scoring
-_ACC_FLOOR = 60  # frontier: don't plot models below this overall accuracy
 
 # Highlighted picks: shared between the KPI cards and the frontier markers so
 # both point at the same models. Emoji marks each on the scatter.
 _HIGHLIGHT_EMOJI = {"best": "👑", "eff": "⚡", "cheap": "💰"}
+
+# Open-weight vs proprietary is not stored in the data schema; classify by known
+# open model series so the frontier can mark them with a distinct marker shape.
+# (openai/gpt-oss-* is open even though its org "openai" also has closed models.)
+_OPEN_SOURCE_PATTERNS = ("gemma", "llama", "nemotron", "gpt-oss",
+                         "mistral", "mixtral", "qwen", "deepseek")
+_MARKER_CLOSED = "circle"   # proprietary
+_MARKER_OPEN = "diamond"    # open-weight
+
+
+def _is_open_source(full_model: str) -> bool:
+    """True for known open-weight models (matched by series name, case-insensitive)."""
+    s = str(full_model).lower()
+    return any(p in s for p in _OPEN_SOURCE_PATTERNS)
+
 
 # Shared chart chrome (slate, semi-transparent so it reads on both themes).
 _GRID_COLOR = "rgba(148,163,184,0.28)"
@@ -824,11 +841,12 @@ def build_kpi_strip(leaderboard_df: pd.DataFrame, metrics_df: pd.DataFrame) -> s
     return f'<div class="cg-kpi-strip">{"".join(cards)}</div>'
 
 
-def build_task_difficulty(leaderboard_df: pd.DataFrame):
+def build_task_difficulty(leaderboard_df: pd.DataFrame, metrics_df: pd.DataFrame):
     """Horizontal bar chart of per-task difficulty: the mean accuracy across
-    all models for each of the 12 tasks, sorted hardest-first. This is an
-    aggregate view the per-model table doesn't give — it shows where the whole
-    field struggles. Bars are colored on a red→green scale (red = hard)."""
+    the evaluated models for each of the 12 tasks, sorted hardest-first. Only
+    models actually run in the daily eval (those with token data) are counted —
+    stale / unavailable entries like gpt-4o-latest would otherwise skew the
+    mean. Bars are colored on a red→green scale (red = hard)."""
     fig = go.Figure()
     if leaderboard_df is None or leaderboard_df.empty:
         fig.update_layout(
@@ -838,10 +856,17 @@ def build_task_difficulty(leaderboard_df: pd.DataFrame):
         )
         return fig
 
-    tasks = [t for t in _task_col_names() if t in leaderboard_df.columns]
+    # Count only the actually-evaluated models (those with token data);
+    # fall back to the full set if the metrics join produced nothing.
+    base = _highlights_base(leaderboard_df, metrics_df)
+    run = base[base["tokens_per_query"].notna()]
+    if run.empty:
+        run = base
+
+    tasks = [t for t in _task_col_names() if t in run.columns]
     means = []
     for t in tasks:
-        vals = pd.to_numeric(leaderboard_df[t], errors="coerce").dropna()
+        vals = pd.to_numeric(run[t], errors="coerce").dropna()
         if not vals.empty:
             means.append((t, float(vals.mean()), int(vals.shape[0])))
     if not means:
@@ -898,20 +923,56 @@ def build_task_difficulty(leaderboard_df: pd.DataFrame):
     return fig
 
 
-def build_efficiency_frontier(leaderboard_df: pd.DataFrame, metrics_df: pd.DataFrame):
+def _label_positions(xs, ys, x_range, y_range):
+    """Pick a text position (one of 8 around each marker) that keeps labels
+    apart. Plotly has no built-in label de-collision, so this greedily places
+    each label on the side with the most free space relative to other markers
+    and already-placed labels. Returns a list of Plotly ``textposition`` strings
+    aligned with the input order.
+    """
+    import math
+    xr = (x_range[1] - x_range[0]) or 1.0
+    yr = (y_range[1] - y_range[0]) or 1.0
+    nx = [(x - x_range[0]) / xr for x in xs]
+    ny = [(y - y_range[0]) / yr for y in ys]
+    dirs = [
+        ("middle right", 1.0, 0.0), ("middle left", -1.0, 0.0),
+        ("top center", 0.0, 1.0), ("bottom center", 0.0, -1.0),
+        ("top right", 0.75, 0.75), ("bottom right", 0.75, -0.75),
+        ("top left", -0.75, 0.75), ("bottom left", -0.75, -0.75),
+    ]
+    off = 0.06
+    markers = list(zip(nx, ny))
+    placed = []  # chosen label anchor points (normalized)
+    result = [None] * len(xs)
+    for i in sorted(range(len(xs)), key=lambda k: -ny[k]):  # densest (top) first
+        best, best_score = None, -1.0
+        for name, dxu, dyu in dirs:
+            lx, ly = nx[i] + dxu * off, ny[i] + dyu * off
+            dm = min((math.hypot(lx - mx, ly - my)
+                      for j, (mx, my) in enumerate(markers) if j != i), default=1.0)
+            dp = min((math.hypot(lx - px, ly - py) for px, py in placed), default=1.0)
+            score = min(dm, dp)
+            if score > best_score:
+                best_score, best = score, (name, lx, ly)
+        result[i] = best[0]
+        placed.append((best[1], best[2]))
+    return result
+
+
+def build_efficiency_frontier(leaderboard_df: pd.DataFrame, metrics_df: pd.DataFrame,
+                              workflow_label: str = ""):
     """Accuracy vs tokens/query scatter (linear x), colored by family.
 
     The token spread here is < 1 order of magnitude (~3x), so a linear x-axis
-    is clearer than log. Only models at/above _ACC_FLOOR accuracy are plotted —
-    below that the run is effectively broken and just clutters the view. Models
-    without token data can't be placed on the cost axis and are skipped.
+    is clearer than log. All evaluated models are plotted (no accuracy floor);
+    the y-axis auto-fits to the data. Models without token data can't be placed
+    on the cost axis and are skipped.
     """
     base_full = _highlights_base(leaderboard_df, metrics_df)
     fig = go.Figure()
     base = base_full
-    if not base.empty:
-        acc = pd.to_numeric(base[_AVERAGE_COL], errors="coerce")
-        base = base[acc >= _ACC_FLOOR]
+    # No accuracy floor: show all evaluated models (incl. low-accuracy open-weight).
     pts = base.dropna(subset=["tokens_per_query"]) if not base.empty else base
     if pts is None or pts.empty:
         fig.update_layout(
@@ -921,17 +982,40 @@ def build_efficiency_frontier(leaderboard_df: pd.DataFrame, metrics_df: pd.DataF
         )
         return fig
 
-    palette = {"openai": "#10a37f", "anthropic": "#d97757", "google": "#4285f4"}
+    # Axis ranges (explicit so the label de-collision normalization matches the
+    # rendered plot). Pad the right a bit more to give edge labels room.
+    _xs = pd.to_numeric(pts["tokens_per_query"], errors="coerce")
+    _xmin, _xmax = float(_xs.min()), float(_xs.max())
+    _span = (_xmax - _xmin) or 1.0
+    x_range = [_xmin - 0.10 * _span, _xmax + 0.16 * _span]
+    _ys = pd.to_numeric(pts[_AVERAGE_COL], errors="coerce")
+    _ymin = float(_ys.min()) if not _ys.dropna().empty else 0.0
+    y_range = [max(0.0, _ymin - 5), 105]
+
+    # Choose a non-overlapping side for each model's label.
+    _pos = _label_positions(pts["tokens_per_query"].tolist(),
+                            pts[_AVERAGE_COL].tolist(), x_range, y_range)
+    pos_map = dict(zip(pts["full_model"].tolist(), _pos))
+
+    palette = {"openai": "#10a37f", "anthropic": "#d97757", "google": "#4285f4",
+               "meta-llama": "#7c3aed", "nvidia": "#ca8a04", "mistralai": "#e11d48",
+               "deepseek": "#0891b2", "qwen": "#db2777"}
+    # Color = org/family; marker shape = open-weight (diamond) vs proprietary (circle).
+    # Real points are hidden from the legend; a custom grouped legend is built below.
     for fam, grp in pts.groupby("family"):
+        symbols = [(_MARKER_OPEN if _is_open_source(fm) else _MARKER_CLOSED)
+                   for fm in grp["full_model"]]
         fig.add_trace(go.Scatter(
             x=grp["tokens_per_query"],
             y=grp[_AVERAGE_COL],
             mode="markers+text",
             name=str(fam),
-            marker=dict(size=12, color=palette.get(str(fam), "#94a3b8"),
+            showlegend=False,
+            marker=dict(size=12, symbol=symbols,
+                        color=palette.get(str(fam), "#94a3b8"),
                         line=dict(width=1, color="white")),
             text=grp["display"],
-            textposition="top center",
+            textposition=[pos_map[fm] for fm in grp["full_model"]],
             textfont={"size": 9},
             cliponaxis=False,
             hovertemplate="%{text}<br>%{y:.0f}%  ·  %{x:,.0f} tok/q<extra></extra>",
@@ -960,45 +1044,77 @@ def build_efficiency_frontier(leaderboard_df: pd.DataFrame, metrics_df: pd.DataF
     fig.update_layout(
         autosize=True,
         height=440,
-        margin=dict(l=64, r=116, t=30, b=58),
+        margin=dict(l=64, r=150, t=30, b=58),
         xaxis=dict(
             title="Average tokens per query",
             tickformat="~s",
+            range=x_range,
             showgrid=True, gridcolor=_GRID_COLOR, gridwidth=1,
             showline=True, linecolor=_AXIS_COLOR, linewidth=1.2, mirror=True,
             ticks="outside", tickcolor=_AXIS_COLOR, zeroline=False,
         ),
         yaxis=dict(
             title="Overall accuracy (%)",
-            range=[_ACC_FLOOR, 102],
+            range=y_range,
             showgrid=True, gridcolor=_GRID_COLOR, gridwidth=1,
             showline=True, linecolor=_AXIS_COLOR, linewidth=1.2, mirror=True,
             ticks="outside", tickcolor=_AXIS_COLOR, zeroline=False,
         ),
-        legend=dict(title_text="Family", yanchor="top", y=1.0,
-                    xanchor="left", x=1.005, bgcolor="rgba(0,0,0,0)"),
+        showlegend=False,
         hovermode="closest",
         plot_bgcolor="rgba(0,0,0,0)",
         paper_bgcolor="rgba(0,0,0,0)",
     )
 
-    # Icon legend on the RIGHT side of the chart (kept out of the title). The
-    # per-point emoji above mark the actual models; this explains them.
-    _legend_lines = [(_HIGHLIGHT_EMOJI["best"], "best overall"),
-                     (_HIGHLIGHT_EMOJI["eff"], "most efficient"),
-                     (_HIGHLIGHT_EMOJI["cheap"], "cheapest")]
-    for i, (emo, desc) in enumerate(_legend_lines):
+    # ---- Right-side legend, built manually. Each row is one annotation: a
+    # larger colored <span> glyph (■ / ◆● / emoji) immediately followed by the
+    # label, so the marker is big and sits tight against the text. Three titled
+    # groups in one consistent style. ----
+    _fams = sorted(pts["family"].dropna().unique())
+    _lx = 1.02                 # single left-aligned column (paper x)
+    _dy, _gap = 0.052, 0.1    # fixed tight row / group spacing
+    _ly = [1.0]                # mutable y-cursor
+
+    def _leg_title(text):
+        fig.add_annotation(xref="paper", yref="paper", x=_lx, y=_ly[0],
+                           xanchor="left", yanchor="middle", showarrow=False,
+                           text=f"<b>{text}</b>", font=dict(size=12, color="#334155"))
+        _ly[0] -= _dy
+
+    def _leg_row(glyph, glyph_color, label, gpx=18):
         fig.add_annotation(
-            xref="paper", yref="paper", x=1.005, y=0.46 - i * 0.085,
+            xref="paper", yref="paper", x=_lx, y=_ly[0],
             xanchor="left", yanchor="middle", showarrow=False, align="left",
-            text=f"{emo} {desc}", font=dict(size=12, color="#334155"),
-        )
+            text=(f'<span style="font-size:{gpx}px;color:{glyph_color}">{glyph}</span>'
+                  f' {label}'),
+            font=dict(size=13, color="#334155"))
+        _ly[0] -= _dy
+
+    _leg_title("Family")
+    for _fam in _fams:
+        _leg_row("■", palette.get(str(_fam), "#94a3b8"), str(_fam), gpx=18)
+    _ly[0] -= _gap
+    _leg_title("Model type")
+    _leg_row("◆", "#64748b", "Open-weight", gpx=16)
+    _leg_row("●", "#64748b", "Proprietary", gpx=16)
+    _ly[0] -= _gap
+    _leg_title("Highlights")
+    _leg_row(_HIGHLIGHT_EMOJI["best"], "#334155", "Best overall", gpx=15)
+    _leg_row(_HIGHLIGHT_EMOJI["eff"], "#334155", "Most efficient", gpx=15)
+    _leg_row(_HIGHLIGHT_EMOJI["cheap"], "#334155", "Cheapest", gpx=15)
 
     if n_dropped:
         fig.add_annotation(
             text=f"{n_dropped} model(s) hidden — no token data",
             showarrow=False, xref="paper", yref="paper", x=1.0, y=-0.16,
             xanchor="right", font=dict(size=10, color="#94a3b8"),
+        )
+    # Open-weight multi-agent token costs are estimated (single-agent is measured).
+    if "multi" in workflow_label.lower():
+        fig.add_annotation(
+            text="open-weight token costs are estimated",
+            showarrow=False, xref="paper", yref="paper", x=0.0, y=-0.16,
+            xanchor="left", font=dict(size=10, color="#94a3b8"),
         )
     return fig
 
@@ -1027,7 +1143,6 @@ def init_leaderboard(dataframe):
 demo = gr.Blocks(css=custom_css, head=group_columns_head)
 with demo:
     gr.HTML(TITLE)
-    gr.Markdown(INTRODUCTION_TEXT, elem_classes="markdown-text", elem_id="cg-intro-block")
 
     with gr.Tabs(elem_classes="tab-buttons") as tabs:
         def _benchmark_subtabs(label, df, metrics_df, base_elem_id):
@@ -1050,17 +1165,17 @@ with demo:
                         'Token = avg tokens / query.</div>'
                     )
                     gr.Plot(
-                        value=build_efficiency_frontier(df, metrics_df),
+                        value=build_efficiency_frontier(df, metrics_df, workflow_label=label),
                         elem_id=f"{base_elem_id}-frontier",
                         elem_classes="cg-frontier-plot",
                     )
                     gr.HTML(
                         '<div class="cg-section-label">Task difficulty</div>'
-                        '<div class="cg-section-sub">Mean accuracy across all models — '
-                        'shorter / redder = harder for the field.</div>'
+                        '<div class="cg-section-sub">Mean accuracy across the evaluated '
+                        'models — shorter / redder = harder for the field.</div>'
                     )
                     gr.Plot(
-                        value=build_task_difficulty(df),
+                        value=build_task_difficulty(df, metrics_df),
                         elem_id=f"{base_elem_id}-difficulty",
                         elem_classes="cg-frontier-plot",
                     )
@@ -1406,6 +1521,147 @@ with demo:
                 ],
                 submission_result,
             )
+
+        with gr.TabItem("🧪 Contribute a Task", elem_id="llm-benchmark-tab-table", id=5):
+          with gr.Tabs(elem_classes="tab-buttons", elem_id="cg-contribute-subtabs"):
+            # ============ Sub-tab 1: submit a new task ============
+            with gr.TabItem("📝 Submit a task", id=0):
+                with gr.Column(elem_classes="cg-form-group cg-contribute-intro-box"):
+                    gr.Markdown(
+                        "## Contribute an evaluation task\n"
+                        "Add your own chemistry eval task to the benchmark. You only provide the "
+                        "**query**, an **oracle** that proves it's solvable (solve.sh + solve.py), "
+                        "and the **ground truth**. We assemble a complete "
+                        f"[harbor compatible task](https://huggingface.co/datasets/{TASKS_REPO}) "
+                        "and open a pull request — nothing runs until a maintainer reviews it.",
+                        elem_classes="cg-contribute-intro",
+                    )
+
+                # ---- Part 1: basic information ----
+                gr.HTML("<div class='cg-form-section-title'>1. Basic information</div>")
+                with gr.Column(elem_classes="cg-form-group"):
+                    with gr.Row():
+                        task_author = gr.Textbox(label="Your name")
+                        task_email = gr.Textbox(label="Email / contact")
+                        task_org = gr.Textbox(label="Organization (optional)")
+                    with gr.Row():
+                        task_name_tb = gr.Textbox(
+                            label="Task name", placeholder="e.g. so2-dipole-gfn2",
+                        )
+                        task_category = gr.Dropdown(
+                            choices=[t.value.benchmark for t in Tasks],
+                            label="Category", value="smiles_lookup", interactive=True,
+                        )
+                    task_notes = gr.Textbox(
+                        label="Description", lines=3,
+                        info="What the task asks and what makes it hard (optional).",
+                    )
+                    with gr.Accordion("Advanced — domain / field / subfield", open=False):
+                        with gr.Row():
+                            task_domain = gr.Textbox(label="Domain", value="physical-sciences")
+                            task_field = gr.Textbox(label="Field", value="chemistry-and-materials")
+                            task_subfield = gr.Textbox(label="Subfield", value="computational-chemistry")
+
+                # ---- Part 2: task composition ----
+                gr.HTML("<div class='cg-form-section-title'>2. Task composition</div>")
+                with gr.Column(elem_classes="cg-form-group"):
+                    task_query = gr.Textbox(
+                        label="Query", lines=3,
+                        value="Provide the SMILES string corresponding to this molecule: sulfur dioxide",
+                        info="The natural-language chemistry question the agent must answer.",
+                    )
+                    task_ground_truth = gr.Code(
+                        label="Ground truth (structured_output JSON, or a full answer object)",
+                        language="json",
+                        value='{\n  "smiles": ["O=S=O"]\n}',
+                    )
+                    with gr.Row():
+                        task_solve_py = gr.Code(
+                            label="solve.py — oracle that writes /root/results/answers.json",
+                            language="python",
+                            value=(
+                                "import json\n"
+                                "from pathlib import Path\n\n"
+                                "# Oracle: reproduce the ground truth. Replace this with a real\n"
+                                "# computation (ase / rdkit / mace / tblite) that derives the answer\n"
+                                "# from scratch — it must match your ground truth.\n"
+                                'queries = json.loads(Path("/root/data/queries.json").read_text())\n'
+                                "answers = []\n"
+                                "for q in queries:\n"
+                                "    answers.append({\n"
+                                '        "id": q["id"],\n'
+                                '        "category": q.get("category", ""),\n'
+                                '        "query": q["query"],\n'
+                                '        "answer": {"structured_output": {"smiles": ["O=S=O"]}},\n'
+                                "    })\n"
+                                'Path("/root/results").mkdir(parents=True, exist_ok=True)\n'
+                                'Path("/root/results/answers.json").write_text(json.dumps(answers, indent=2))\n'
+                            ),
+                        )
+                        with gr.Column():
+                            task_solve_sh = gr.Code(
+                                label="solve.sh — entrypoint (leave as-is to just run solve.py)",
+                                language="shell",
+                                value=(
+                                    "#!/bin/bash\n"
+                                    "set -euo pipefail\n"
+                                    'DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"\n'
+                                    'python3 "$DIR/solve.py"\n'
+                                ),
+                            )
+                            task_tools = gr.CheckboxGroup(
+                                choices=["RDKit", "MACE", "TBLite", "NWChem", "ORCA",
+                                         "UMA", "AIMNet2", "gRASPA", "XANES"],
+                                label="Tools used",
+                                info="Click to select the compute tools your task relies on.",
+                                elem_classes="cg-tool-tags",
+                            )
+
+                submit_task_button = gr.Button("Submit Task", elem_id="cg-submit-btn")
+                task_submit_result = gr.Markdown()
+
+            # ============ Sub-tab 2: submission status board ============
+            # Each submitted task advances review -> validation -> evaluation on
+            # its open PR, and is merged (done) once evaluation passes.
+            with gr.TabItem("📋 Submission status", id=1):
+                with gr.Row(elem_classes="cg-form-section-title-row"):
+                    gr.HTML(
+                        "<div class='cg-form-section-title'>Submission status</div>"
+                        "<div class='cg-section-sub'>Community tasks and where each one "
+                        "is in the review → validation → evaluation → done pipeline.</div>"
+                    )
+                    refresh_status_button = gr.Button(
+                        "↻ Refresh", size="sm", elem_classes="cg-viewall-btn", scale=0
+                    )
+                task_status_view = gr.HTML(build_task_status_view)
+
+          # --- wiring (outside the sub-tabs so all handles are in scope) ---
+          refresh_status_button.click(fn=build_task_status_view, outputs=task_status_view)
+          submit_task_button.click(
+              add_new_task,
+              [
+                  task_name_tb,
+                  task_category,
+                  task_query,
+                  task_ground_truth,
+                  task_solve_sh,
+                  task_solve_py,
+                  task_author,
+                  task_email,
+                  task_org,
+                  task_domain,
+                  task_field,
+                  task_subfield,
+                  task_notes,
+                  task_tools,
+              ],
+              task_submit_result,
+          )
+          # Refresh the status board right after a successful submission so the
+          # contributor sees their new task appear (as "under review").
+          submit_task_button.click(fn=build_task_status_view, outputs=task_status_view)
+
+    gr.Markdown(INTRODUCTION_TEXT, elem_classes="markdown-text", elem_id="cg-intro-block")
 
     with gr.Row(elem_id="cg-citation-section"):
         with gr.Accordion("📙 Citation", open=False):

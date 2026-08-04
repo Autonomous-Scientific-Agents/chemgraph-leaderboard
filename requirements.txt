@@ -3,10 +3,10 @@ gradio==5.50.0
 gradio[oauth]==5.50.0
 gradio_leaderboard==0.0.14
 gradio_client
-huggingface-hub>=0.18.0
+huggingface-hub==1.23.0
 numpy
 pandas
 plotly
 python-dateutil
-tqdm
+tqdm==4.68.4
 transformers

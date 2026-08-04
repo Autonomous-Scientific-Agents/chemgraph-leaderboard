@@ -1,5 +1,28 @@
+import base64
 from dataclasses import dataclass
 from enum import Enum
+from pathlib import Path
+
+
+def _logo_data_uri() -> str:
+    """Read the ChemGraph icon and return a base64 data URI.
+
+    Embedding the logo inline avoids depending on Gradio's static-file route
+    (which is version-sensitive and has bitten this Space before) — the image
+    travels inside the page HTML and renders identically locally and on HF.
+    """
+    p = Path(__file__).resolve().parent.parent / "assets" / "chemgraph-icon.png"
+    try:
+        return "data:image/png;base64," + base64.b64encode(p.read_bytes()).decode()
+    except OSError:
+        return ""
+
+
+_LOGO_URI = _logo_data_uri()
+_LOGO_IMG = (
+    f'<img class="cg-title-logo" src="{_LOGO_URI}" alt="ChemGraph logo">'
+    if _LOGO_URI else ""
+)
 
 
 @dataclass
@@ -35,15 +58,17 @@ NUM_FEWSHOT = 0  # Change with your few shot
 
 
 # Your leaderboard name
-TITLE = """
+TITLE = f"""
 <div id="cg-title-banner">
-    <h1>ChemGraph Leaderboard</h1>
-    <p class="cg-subtitle">Evaluating Agentic AI for Computational Chemistry & Materials Science</p>
-    <div class="cg-badge-row">
-        <span class="cg-badge">40 Queries</span>
-        <span class="cg-badge">12 Categories</span>
-        <span class="cg-badge">Daily Evaluation</span>
-        <span class="cg-badge">Single & Multi-Agent</span>
+    {_LOGO_IMG}
+    <div class="cg-title-text">
+        <h1>ChemGraph Leaderboard</h1>
+        <p class="cg-subtitle">Evaluating Agentic AI for Computational Chemistry &amp; Materials Science</p>
+        <div class="cg-badge-row">
+            <span class="cg-badge">40 Queries</span>
+            <span class="cg-badge">12 Categories</span>
+            <span class="cg-badge">Single &amp; Multi-Agent</span>
+        </div>
     </div>
 </div>
 """
@@ -52,7 +77,7 @@ TITLE = """
 INTRODUCTION_TEXT = """
 ChemGraph Leaderboard provides a reproducible evaluation of **agentic AI frameworks and large language models (LLMs)** for computational chemistry and materials science.
 
-Models are evaluated daily on **40 chemistry queries** grouped into **12 task categories**:
+Models are evaluated on **40 chemistry queries** grouped into **12 task categories**:
 
 | Category | Queries | Description |
 |----------|---------|-------------|
@@ -95,7 +120,7 @@ Both workflows are evaluated on the same 12 task categories and scored identical
 a structured judge scores each answer as correct or incorrect (binary accuracy with 5%
 relative tolerance for numerical values).
 
-Results are updated daily via an automated pipeline that:
+Results are updated via an automated pipeline that:
 1. Runs `chemgraph-eval` against all configured models for both workflows
 2. Transforms the benchmark results into leaderboard format
 3. Pushes updated results to the HF Hub datasets

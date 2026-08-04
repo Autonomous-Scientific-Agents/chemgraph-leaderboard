@@ -51,38 +51,46 @@ custom_css = """
    1. HEADER / TITLE BANNER
    ============================================================ */
 #cg-title-banner {
-    background: var(--cg-gradient);
+    /* Bright blue hero: layered blue gradient + soft light blooms, with faint
+       two molecular line-art fragments partially shown at the top-left and
+       bottom-right (chemistry atmosphere). Glossy top highlight via inset. */
+    background:
+        url("data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20width%3D%27374%27%20height%3D%27274%27%20viewBox%3D%2744%2020%20374%20274%27%3E%3Cg%20fill%3D%27none%27%20stroke%3D%27rgba%28255%2C255%2C255%2C0.18%29%27%20stroke-width%3D%273%27%20stroke-linecap%3D%27round%27%3E%3Cpath%20d%3D%27M290%20150%20L250%20219%20L170%20219%20L130%20150%20L170%2081%20L250%2081%20Z%27%2F%3E%3Cpath%20d%3D%27M290%20150%20L360%20150%20L400%20108%27%2F%3E%3Cpath%20d%3D%27M250%2081%20L290%2034%27%2F%3E%3Cpath%20d%3D%27M170%20219%20L138%20278%27%2F%3E%3Cpath%20d%3D%27M130%20150%20L58%20150%27%2F%3E%3Cpath%20d%3D%27M243%2092%20L201%2092%27%2F%3E%3C%2Fg%3E%3Cg%20fill%3D%27rgba%28255%2C255%2C255%2C0.27%29%27%3E%3Ccircle%20cx%3D%27290%27%20cy%3D%27150%27%20r%3D%278%27%2F%3E%3Ccircle%20cx%3D%27250%27%20cy%3D%27219%27%20r%3D%278%27%2F%3E%3Ccircle%20cx%3D%27170%27%20cy%3D%27219%27%20r%3D%278%27%2F%3E%3Ccircle%20cx%3D%27130%27%20cy%3D%27150%27%20r%3D%278%27%2F%3E%3Ccircle%20cx%3D%27170%27%20cy%3D%2781%27%20r%3D%278%27%2F%3E%3Ccircle%20cx%3D%27250%27%20cy%3D%2781%27%20r%3D%278%27%2F%3E%3Ccircle%20cx%3D%27360%27%20cy%3D%27150%27%20r%3D%278%27%2F%3E%3Ccircle%20cx%3D%27400%27%20cy%3D%27108%27%20r%3D%278%27%2F%3E%3Ccircle%20cx%3D%27290%27%20cy%3D%2734%27%20r%3D%278%27%2F%3E%3Ccircle%20cx%3D%27138%27%20cy%3D%27278%27%20r%3D%278%27%2F%3E%3Ccircle%20cx%3D%2758%27%20cy%3D%27150%27%20r%3D%278%27%2F%3E%3C%2Fg%3E%3C%2Fsvg%3E") no-repeat left -85px top -55px / 260px auto,
+        url("data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20width%3D%27374%27%20height%3D%27274%27%20viewBox%3D%2744%2020%20374%20274%27%3E%3Cg%20fill%3D%27none%27%20stroke%3D%27rgba%28255%2C255%2C255%2C0.18%29%27%20stroke-width%3D%273%27%20stroke-linecap%3D%27round%27%3E%3Cpath%20d%3D%27M290%20150%20L250%20219%20L170%20219%20L130%20150%20L170%2081%20L250%2081%20Z%27%2F%3E%3Cpath%20d%3D%27M290%20150%20L360%20150%20L400%20108%27%2F%3E%3Cpath%20d%3D%27M250%2081%20L290%2034%27%2F%3E%3Cpath%20d%3D%27M170%20219%20L138%20278%27%2F%3E%3Cpath%20d%3D%27M130%20150%20L58%20150%27%2F%3E%3Cpath%20d%3D%27M243%2092%20L201%2092%27%2F%3E%3C%2Fg%3E%3Cg%20fill%3D%27rgba%28255%2C255%2C255%2C0.27%29%27%3E%3Ccircle%20cx%3D%27290%27%20cy%3D%27150%27%20r%3D%278%27%2F%3E%3Ccircle%20cx%3D%27250%27%20cy%3D%27219%27%20r%3D%278%27%2F%3E%3Ccircle%20cx%3D%27170%27%20cy%3D%27219%27%20r%3D%278%27%2F%3E%3Ccircle%20cx%3D%27130%27%20cy%3D%27150%27%20r%3D%278%27%2F%3E%3Ccircle%20cx%3D%27170%27%20cy%3D%2781%27%20r%3D%278%27%2F%3E%3Ccircle%20cx%3D%27250%27%20cy%3D%2781%27%20r%3D%278%27%2F%3E%3Ccircle%20cx%3D%27360%27%20cy%3D%27150%27%20r%3D%278%27%2F%3E%3Ccircle%20cx%3D%27400%27%20cy%3D%27108%27%20r%3D%278%27%2F%3E%3Ccircle%20cx%3D%27290%27%20cy%3D%2734%27%20r%3D%278%27%2F%3E%3Ccircle%20cx%3D%27138%27%20cy%3D%27278%27%20r%3D%278%27%2F%3E%3Ccircle%20cx%3D%2758%27%20cy%3D%27150%27%20r%3D%278%27%2F%3E%3C%2Fg%3E%3C%2Fsvg%3E") no-repeat right -98px bottom -72px / 285px auto,
+        radial-gradient(900px 440px at 86% -22%, rgba(147, 197, 253, 0.50), transparent 60%),
+        radial-gradient(760px 420px at 6% 122%, rgba(37, 99, 235, 0.42), transparent 55%),
+        linear-gradient(125deg, #1e40af 0%, #2563eb 52%, #3b82f6 100%);
     border-radius: var(--cg-radius);
     padding: 2rem 2.5rem 1.8rem;
     margin-bottom: 1rem;
-    box-shadow: var(--cg-shadow-lg);
-    text-align: center;
+    box-shadow: var(--cg-shadow-lg), inset 0 1px 0 0 rgba(255, 255, 255, 0.20);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 1.5rem;
+    text-align: left;
     position: relative;
     overflow: hidden;
 }
 
-#cg-title-banner::before {
-    content: "";
-    position: absolute;
-    top: -50%;
-    right: -20%;
-    width: 400px;
-    height: 400px;
-    background: radial-gradient(circle, rgba(255,255,255,0.08) 0%, transparent 70%);
+/* ChemGraph icon seated on a white disc for contrast on the blue banner. */
+#cg-title-banner .cg-title-logo {
+    flex-shrink: 0;
+    width: 76px;
+    height: 76px;
     border-radius: 50%;
-    pointer-events: none;
+    background: #ffffff;
+    padding: 7px;
+    box-sizing: border-box;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
+    position: relative;
+    z-index: 1;
 }
 
-#cg-title-banner::after {
-    content: "";
-    position: absolute;
-    bottom: -40%;
-    left: -10%;
-    width: 300px;
-    height: 300px;
-    background: radial-gradient(circle, rgba(255,255,255,0.05) 0%, transparent 70%);
-    border-radius: 50%;
-    pointer-events: none;
+#cg-title-banner .cg-title-text {
+    text-align: left;
+    position: relative;
+    z-index: 1;
 }
 
 #cg-title-banner h1 {
@@ -108,7 +116,8 @@ custom_css = """
 
 #cg-title-banner .cg-badge-row {
     display: flex;
-    justify-content: center;
+    flex-wrap: wrap;
+    justify-content: flex-start;
     gap: 0.6rem;
     margin-top: 1rem;
     position: relative;
@@ -158,7 +167,8 @@ custom_css = """
 }
 
 #cg-intro-block th {
-    background: var(--cg-gradient) !important;
+    /* Gentle light-blue gradient (matches the banner family), white text. */
+    background: linear-gradient(135deg, #2563eb 0%, #3b82f6 100%) !important;
     color: #ffffff !important;
     font-weight: 600 !important;
     font-size: 0.85rem !important;
@@ -774,7 +784,417 @@ custom_css = """
     width: 100% !important;
 }
 
-/* Small uppercase caption above each chart. */
+/* Contribute-a-Task sections: a clean white bordered card (a Column, not a
+   gr.Group — so fields keep their own borders and stay clearly separated,
+   with no gray gap-fill). */
+/* ONE consistent gap everywhere inside the form cards: the column, the merged
+   ".form" wrapper, and explicit rows all use the same value so the vertical
+   (and in-row) rhythm is uniform regardless of component type. */
+.cg-form-group {
+    background: var(--cg-surface) !important;
+    border: 1px solid var(--cg-border) !important;
+    border-radius: var(--cg-radius) !important;
+    padding: 0.8rem 1rem !important;
+    margin-bottom: 0.5rem !important;
+    gap: 0.3rem !important;
+}
+/* Kill Gradio's merged-input ".form" wrapper (gray fill + extra border) and
+   align its gap to the column's. */
+.cg-form-group .form {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    gap: 0.3rem !important;
+    overflow: visible !important;
+}
+/* Same gap for explicit rows (e.g. name / email / org). */
+.cg-form-group .row {
+    gap: 0.3rem !important;
+}
+
+/* Gradio textareas default to overflow-y:scroll → an always-on scrollbar that
+   shows as a gray strip at the right edge of single-line boxes (esp. on macOS
+   "always show scrollbars"). Only show it when content actually overflows. */
+.cg-form-group textarea {
+    overflow-y: auto !important;
+}
+
+/* Section title — sits OUTSIDE/above each form card, in brand blue. */
+.cg-form-section-title {
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: #000000;
+    margin: 0.8rem 0 0.4rem;
+}
+/* Section title + inline action button (e.g. Submission status + Refresh). */
+.cg-form-section-title-row {
+    align-items: center !important;
+    gap: 0.6rem !important;
+    flex-wrap: nowrap !important;
+}
+.cg-form-section-title-row .cg-form-section-title {
+    margin: 0.4rem 0;
+}
+
+/* Opening description — boxed (a .cg-form-group card) with a blue heading. */
+.cg-contribute-intro h1,
+.cg-contribute-intro h2 {
+    color: var(--cg-primary) !important;
+    margin-top: 0 !important;
+}
+
+/* "Tools used" — render the CheckboxGroup options as clickable colored pills.
+   Selected state is only input:checked (label class unchanged) → use :has(). */
+.cg-tool-tags {
+    background: var(--cg-surface) !important;
+    border: 1px solid var(--cg-border) !important;
+    border-radius: var(--cg-radius-sm) !important;
+    box-shadow: none !important;
+    padding: 0.6rem 0.8rem !important;
+}
+.cg-tool-tags label {
+    display: inline-flex !important;
+    align-items: center;
+    border: 1.5px solid var(--tag, #94a3b8) !important;
+    color: var(--tag, #475569) !important;
+    background: transparent !important;
+    border-radius: 999px !important;
+    padding: 0.24rem 0.75rem !important;
+    margin: 0.2rem 0.4rem 0.2rem 0 !important;
+    font-size: 0.82rem;
+    font-weight: 600;
+    cursor: pointer !important;
+    transition: all 0.12s ease;
+}
+.cg-tool-tags label input[type="checkbox"] {
+    display: none !important;
+}
+.cg-tool-tags label span {
+    margin: 0 !important;
+}
+.cg-tool-tags label:hover {
+    filter: brightness(0.97);
+}
+.cg-tool-tags label:has(input:checked) {
+    background: var(--tag, #2563eb) !important;
+    border-color: var(--tag, #2563eb) !important;
+    color: #ffffff !important;
+}
+/* per-tag color, by position
+   (RDKit · MACE · TBLite · NWChem · ORCA · UMA · AIMNet2 · gRASPA · XANES) */
+.cg-tool-tags label:nth-of-type(1) { --tag: #2563eb; }  /* RDKit  — blue   */
+.cg-tool-tags label:nth-of-type(2) { --tag: #0d9488; }  /* MACE   — teal   */
+.cg-tool-tags label:nth-of-type(3) { --tag: #d97706; }  /* TBLite — amber  */
+.cg-tool-tags label:nth-of-type(4) { --tag: #16a34a; }  /* NWChem — green  */
+.cg-tool-tags label:nth-of-type(5) { --tag: #7c3aed; }  /* ORCA   — violet */
+.cg-tool-tags label:nth-of-type(6) { --tag: #db2777; }  /* UMA    — pink   */
+.cg-tool-tags label:nth-of-type(7) { --tag: #0891b2; }  /* AIMNet2— cyan   */
+.cg-tool-tags label:nth-of-type(8) { --tag: #dc2626; }  /* gRASPA — red    */
+.cg-tool-tags label:nth-of-type(9) { --tag: #65a30d; }  /* XANES  — lime   */
+
+/* ---------------------------------------------------------------- */
+/* Submission status board (Contribute tab)                          */
+/* ---------------------------------------------------------------- */
+.cg-sub-section {
+    margin-bottom: 1.1rem;
+}
+.cg-sub-section-head {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: var(--cg-text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    margin: 0.2rem 0 0.5rem;
+}
+.cg-sub-count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 1.3rem;
+    height: 1.3rem;
+    padding: 0 0.4rem;
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: var(--cg-text-muted);
+    background: var(--cg-surface-alt);
+    border: 1px solid var(--cg-border);
+    border-radius: 999px;
+}
+.cg-sub-board {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+.cg-sub-card {
+    background: var(--cg-surface);
+    border: 1px solid var(--cg-border);
+    border-radius: var(--cg-radius-sm);
+    padding: 0.6rem 0.85rem;
+}
+/* The identity/progress row (left | right). Charts (if any) sit below it. */
+.cg-sub-row {
+    display: flex;
+    align-items: stretch;
+    justify-content: space-between;
+    gap: 1rem;
+}
+/* Left column: identity (name + tags + submitter/date/category). */
+.cg-sub-main {
+    flex: 1 1 auto;
+    min-width: 0;  /* let long names wrap instead of pushing the aside off */
+}
+/* Right column: progress/result pinned top, link pinned bottom. */
+.cg-sub-aside {
+    flex: 0 0 auto;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 0.4rem;
+    text-align: right;
+}
+.cg-sub-meta {
+    font-size: 0.75rem;
+    color: var(--cg-text-muted);
+    margin-top: 0.3rem;
+    line-height: 1.4;
+}
+.cg-sub-link {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--cg-primary);
+    text-decoration: none;
+    white-space: nowrap;
+}
+.cg-sub-link:hover {
+    text-decoration: underline;
+}
+.cg-sub-name {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: var(--cg-text-primary);
+    line-height: 1.3;
+}
+.cg-sub-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    margin: 0.35rem 0 0.1rem;
+}
+.cg-sub-tag {
+    display: inline-flex;
+    align-items: center;
+    font-size: 0.72rem;
+    font-weight: 600;
+    line-height: 1.4;
+    padding: 0.08rem 0.55rem;
+    border-radius: 999px;
+    border: 1.5px solid var(--tag, #94a3b8);
+    color: var(--tag, #475569);
+    background: transparent;
+}
+/* 4-step progress stepper: Review -> Validation -> Evaluation -> Done. */
+.cg-stepper {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    margin-top: 0;  /* sits at the top of the right column now */
+    font-size: 0.8rem;
+}
+.cg-step {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.28rem;
+    white-space: nowrap;
+}
+.cg-step.done { color: #16a34a; }
+.cg-step.current { color: var(--cg-primary); font-weight: 700; }
+.cg-step.todo { color: var(--cg-text-muted); }
+.cg-conn {
+    width: 28px;
+    height: 2px;
+    background: var(--cg-border);
+    margin: 0 0.55rem;
+}
+.cg-conn.done { background: #16a34a; }
+/* Completed-task row: a done badge + the evaluation result chip. */
+.cg-sub-result {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 0.5rem;
+    margin-top: 0;  /* sits at the top of the right column now */
+}
+.cg-done-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: #16a34a;
+    background: rgba(22, 163, 74, 0.1);
+    border: 1px solid rgba(22, 163, 74, 0.35);
+    border-radius: 999px;
+    padding: 0.1rem 0.6rem;
+}
+.cg-result {
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: var(--cg-primary);
+    background: rgba(37, 99, 235, 0.08);
+    border: 1px solid rgba(37, 99, 235, 0.3);
+    border-radius: 999px;
+    padding: 0.1rem 0.6rem;
+}
+.cg-result-pending {
+    color: var(--cg-text-muted);
+    background: var(--cg-surface-alt);
+    border-color: var(--cg-border);
+    font-weight: 600;
+}
+.cg-sub-empty {
+    color: var(--cg-text-muted);
+    font-size: 0.9rem;
+    padding: 0.5rem 0;
+}
+/* Narrow screens: fall back to a single stacked column (left-aligned). */
+@media (max-width: 640px) {
+    .cg-sub-row {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    .cg-sub-aside {
+        align-items: flex-start;
+        text-align: left;
+    }
+    .cg-stepper,
+    .cg-sub-result {
+        justify-content: flex-start;
+    }
+}
+
+/* ---------------------------------------------------------------- */
+/* Completed-task expandable charts panel                            */
+/* ---------------------------------------------------------------- */
+.cg-task-charts {
+    margin-top: 0.6rem;
+    border-top: 1px dashed var(--cg-border);
+    padding-top: 0.1rem;
+}
+.cg-task-charts > summary {
+    list-style: none;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--cg-primary);
+    padding: 0.45rem 0 0.2rem;
+    user-select: none;
+}
+.cg-task-charts > summary::-webkit-details-marker { display: none; }
+.cg-task-charts > summary::before {
+    content: "▸";
+    font-size: 0.7rem;
+    transition: transform 0.15s ease;
+}
+.cg-task-charts[open] > summary::before { content: "▾"; }
+.cg-task-charts > summary:hover { text-decoration: underline; }
+.cg-charts-body {
+    padding: 0.4rem 0.1rem 0.2rem;
+}
+.cg-charts-note {
+    font-size: 0.74rem;
+    color: var(--cg-text-muted);
+    margin-bottom: 0.7rem;
+}
+.cg-charts-note b { color: var(--cg-text-secondary); font-weight: 600; }
+.cg-chart-block { margin-top: 1rem; }
+/* Bar + pie side by side (wraps to a column on narrow screens). */
+.cg-charts-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: 0.6rem 1.75rem;
+    margin-top: 1rem;
+}
+.cg-charts-row .cg-chart-block { margin-top: 0; }
+.cg-chart-bar { flex: 1.6 1 340px; min-width: 0; }
+/* Right column holding the two stacked donuts (time split + per-tool). */
+.cg-chart-pie-col {
+    flex: 1 1 300px;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+.cg-chart-title {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--cg-text-primary);
+    margin-bottom: 0.5rem;
+}
+.cg-chart-empty {
+    font-size: 0.82rem;
+    color: var(--cg-text-muted);
+    padding: 0.4rem 0;
+}
+/* shared legend (token bar) + swatches */
+.cg-chart-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem 1rem;
+    font-size: 0.76rem;
+    color: var(--cg-text-secondary);
+    margin-bottom: 0.5rem;
+}
+.cg-lg { display: inline-flex; align-items: center; gap: 0.4rem; }
+.cg-sw {
+    display: inline-block;
+    width: 0.8rem;
+    height: 0.8rem;
+    border-radius: 3px;
+    flex: 0 0 auto;
+}
+.cg-sw-hatch {
+    background-image: repeating-linear-gradient(
+        45deg, transparent, transparent 2px,
+        rgba(255, 255, 255, 0.6) 2px, rgba(255, 255, 255, 0.6) 3.5px) !important;
+    background-blend-mode: normal;
+}
+.cg-token-svg { display: block; max-width: 760px; }
+/* donut + legend (compact — two of these stack in the right column) */
+.cg-pie-wrap {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.3rem 0.9rem;
+}
+.cg-pie-svg { flex: 0 0 auto; }
+.cg-pie-legend {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    flex: 1 1 130px;
+    min-width: 120px;
+}
+.cg-pie-li {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    font-size: 0.73rem;
+    padding: 0.11rem 0;
+    color: var(--cg-text-secondary);
+}
+.cg-pie-name { flex: 1 1 auto; }
+.cg-pie-val { color: var(--cg-text-muted); font-variant-numeric: tabular-nums; }
+
 /* Bold dark chart title (黑体). */
 .cg-section-label {
     font-size: 1rem;
@@ -820,6 +1240,14 @@ custom_css = """
 @media (max-width: 768px) {
     #cg-title-banner {
         padding: 1.5rem 1rem 1.3rem;
+        flex-direction: column;
+        text-align: center;
+        gap: 0.9rem;
+    }
+
+    #cg-title-banner .cg-title-logo {
+        width: 60px;
+        height: 60px;
     }
 
     #cg-title-banner h1 {
@@ -832,6 +1260,7 @@ custom_css = """
 
     #cg-title-banner .cg-badge-row {
         flex-wrap: wrap;
+        justify-content: center;
     }
 
     .tab-buttons button {
