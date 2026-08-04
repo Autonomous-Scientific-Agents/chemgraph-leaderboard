@@ -17,7 +17,7 @@
 #     SKIP_EVAL=true ./scripts/daily_eval.sh
 #
 # Prerequisites:
-#   - conda environment 'chemgraph' with the chemgraph-eval CLI installed
+#   - the chemgraph-eval-env venv (in the ChemGraph repo) with the chemgraph-eval CLI installed
 #   - HF_TOKEN environment variable set (via scripts/dev_env.sh or ~/.bashrc)
 #   - config.toml in CHEMGRAPH_DIR with API keys for LLM providers
 #
@@ -28,7 +28,7 @@ set -euo pipefail
 # ---------- Environment Setup ----------
 # Source per-machine dev/prod overrides if present. This (untracked) file sets
 # CG_OWNER / CG_*_DATASET / HF_TOKEN for dev-vs-prod routing, plus machine
-# paths: CHEMGRAPH_DIR, CG_CONDA_ENV, CONDA_SH, ARGO_USER. Without it, the
+# paths: CHEMGRAPH_DIR, CG_VENV, ARGO_USER. Without it, the
 # hardcoded production defaults below apply.
 _SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 # shellcheck disable=SC1091
@@ -48,13 +48,15 @@ if [ "$PUSH_TARGET" = "prod" ]; then
     echo "[daily_eval] PUSH_TARGET=prod -> pushing to PRODUCTION (Autonomous-Scientific-Agents)"
 fi
 
-# Source conda (bashrc has a non-interactive guard that skips conda init).
-# Override the conda.sh path via CONDA_SH; falls back to miniforge3 then miniconda3.
-CONDA_SH="${CONDA_SH:-$HOME/miniforge3/etc/profile.d/conda.sh}"
-[ -f "$CONDA_SH" ] || CONDA_SH="$HOME/miniconda3/etc/profile.d/conda.sh"
+# Activate the ChemGraph eval venv (has the chemgraph-eval CLI). Override the
+# path via CG_VENV; defaults to a chemgraph-eval-env venv in the ChemGraph repo.
+CG_VENV="${CG_VENV:-${CHEMGRAPH_DIR:-/home/zhye/ChemGraph}/chemgraph-eval-env}"
+if [ ! -f "$CG_VENV/bin/activate" ]; then
+    echo "[daily_eval] ERROR: venv not found at $CG_VENV (set CG_VENV or CHEMGRAPH_DIR)" >&2
+    exit 1
+fi
 # shellcheck disable=SC1091
-source "$CONDA_SH"
-conda activate "${CG_CONDA_ENV:-chemgraph}"
+source "$CG_VENV/bin/activate"
 
 # Source bashrc for HF_TOKEN only if dev_env.sh didn't already provide it.
 # shellcheck disable=SC1090
@@ -76,6 +78,11 @@ CHEMGRAPH_DIR="${CHEMGRAPH_DIR:-/home/zhye/ChemGraph}"
 # Skip the chemgraph eval step and only convert + push existing results.
 SKIP_EVAL="${SKIP_EVAL:-false}"
 
+# Skip pushing to HF Hub (Step 4). Eval, archive and local token/time metrics
+# still run; the converter runs locally but does NOT upload anything. Use for a
+# full eval with no data pushed:  SKIP_PUSH=true ./scripts/daily_eval.sh
+SKIP_PUSH="${SKIP_PUSH:-false}"
+
 # Path to a specific benchmark_*.json to convert. When set, --benchmark-file
 # is passed to the converter and --eval-dir is ignored for file discovery.
 # Leave empty to auto-detect the latest file in EVAL_OUTPUT_DIR.
@@ -85,7 +92,7 @@ BENCHMARK_FILE="${BENCHMARK_FILE:-}"
 CHEMGRAPH_CONFIG="${CHEMGRAPH_CONFIG:-$CHEMGRAPH_DIR/config.toml}"
 
 # Models to evaluate (space-separated)
-MODELS="${EVAL_MODELS:-argo:gpt-4o argo:gpt-4o-latest argo:o3-mini argo:o1 argo:o3 argo:o4-mini argo:gpt-4.1 argo:gpt-4.1-mini argo:gpt-4.1-nano argo:gpt-5.1 argo:gpt-5.2 argo:gpt-5.4 argo:claude-opus-4.6 argo:claude-opus-4.5 argo:claude-opus-4.1 argo:claude-opus-4 argo:claude-haiku-4.5 argo:claude-sonnet-4.5 argo:claude-sonnet-4 argo:claude-haiku-3.5}"
+MODELS="${EVAL_MODELS:-argo:claude-opus-4.8 argo:claude-opus-4.7 argo:claude-sonnet-5 argo:claude-sonnet-4.6 argo:claude-sonnet-4.5 argo:claude-haiku-4.5 argo:gpt-5.6-sol argo:gpt-5.6-terra argo:gpt-5.6-luna argo:gpt-5.5 argo:gpt-5.4 argo:gpt-4.1 argo:gpt-4.1-mini argo:gpt-4o argo:o3 argo:o3-mini argo:o4-mini argo:gemini-3.5-flash argo:gemini-2.5-pro argo:gemini-2.5-flash}"
 
 #MODELS="${EVAL_MODELS:-argo:gpt-4o argo:gpt-4.1-mini}"
 
@@ -131,6 +138,7 @@ echo "ChemGraph Daily Evaluation"
 echo "Date: $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
 echo "Mode: $([ "$SKIP_EVAL" = "true" ] && echo "convert-only" || echo "full pipeline")"
 echo "Workflows: $WORKFLOWS"
+echo "Push: $([ "$SKIP_PUSH" = "true" ] && echo "DISABLED (local only, nothing uploaded)" || echo "$PUSH_TARGET")"
 echo "========================================"
 
 # Track models that failed across all workflows for the final summary.
@@ -306,9 +314,13 @@ else
     echo "  WARNING: metrics extraction failed (non-fatal; continuing)."
 fi
 
-# Step 4: Transform results and push to HF Hub
+# Step 4: Transform results and (optionally) push to HF Hub
 echo ""
-echo "[Step 4/5] Transforming results and pushing to HF Hub..."
+if [ "$SKIP_PUSH" = "true" ]; then
+    echo "[Step 4/5] Transforming results locally (SKIP_PUSH=true — NOT pushing to HF)..."
+else
+    echo "[Step 4/5] Transforming results and pushing to HF Hub..."
+fi
 
 # Clean staging directories so only this run's files are uploaded.
 # The ETL uses date-indexed filenames (results_YYYY-MM-DD.json) and
@@ -329,8 +341,12 @@ for WF in $WORKFLOWS; do
         --results-outdir "$RESULTS_OUTDIR"
         --requests-outdir "$REQUESTS_OUTDIR"
         --workflow "$WF"
-        --push-to-hub
     )
+
+    # Only upload when pushing is enabled; otherwise transform locally only.
+    if [ "$SKIP_PUSH" != "true" ]; then
+        CONVERT_CMD+=(--push-to-hub)
+    fi
 
     # Add --benchmark-file if a specific file was provided
     if [ -n "$BENCHMARK_FILE" ]; then
