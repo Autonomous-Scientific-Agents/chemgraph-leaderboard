@@ -25,8 +25,14 @@ import pandas as pd
 _REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 _LOCAL_METRICS_DIR = _REPO_ROOT / "dataset" / "metrics"
 _MODEL_MAP_PATH = _REPO_ROOT / "dataset" / "model_map.json"
+_PRICING_PATH = _REPO_ROOT / "dataset" / "pricing.json"
 
 _DATE_RE = re.compile(r"metrics_(\d{4}-\d{2}-\d{2})\.csv$")
+
+# Share of prompt tokens assumed cache-hit when a run recorded no cached tokens
+# (the 40-query benchmark repeats a large system prompt, so most input is
+# cacheable). Used only to fill in the missing cached split for the $ estimate.
+_ASSUMED_CACHE_HIT_RATE = 0.60
 
 # Columns the redesigned Highlights view consumes.
 _OUT_COLS = [
@@ -37,6 +43,7 @@ _OUT_COLS = [
     "n_queries",
     "llm_calls",
     "cached_tokens",
+    "usd_per_query",
     "low_conf",
 ]
 
@@ -55,6 +62,39 @@ def _load_model_map() -> dict[str, str]:
         return {str(k): str(v) for k, v in raw.items()}
     except (json.JSONDecodeError, OSError):
         return {}
+
+
+def _load_pricing() -> dict[str, dict]:
+    """``org/model`` -> {"input", "cached", "output"} $ per 1M tokens.
+
+    Only PROPRIETARY (API-billed) models are listed in ``dataset/pricing.json``;
+    open-weight models run on local hardware and are intentionally absent, so
+    they get no dollar cost. ``cached`` defaults to the full input price when a
+    model omits it (i.e. no cache discount). Returns {} if the file is
+    missing/unreadable, in which case no model gets a dollar cost.
+    """
+    if not _PRICING_PATH.exists():
+        return {}
+    try:
+        with open(_PRICING_PATH) as fp:
+            raw = json.load(fp)
+    except (json.JSONDecodeError, OSError):
+        return {}
+    models = raw.get("models", raw) if isinstance(raw, dict) else {}
+    out: dict[str, dict] = {}
+    for k, v in models.items():
+        if not isinstance(v, dict) or "input" not in v or "output" not in v:
+            continue
+        try:
+            inp = float(v["input"])
+            out[str(k)] = {
+                "input": inp,
+                "cached": float(v.get("cached", inp)),
+                "output": float(v["output"]),
+            }
+        except (TypeError, ValueError):
+            continue
+    return out
 
 
 def _candidate_metrics_dirs() -> list[Path]:
@@ -132,11 +172,49 @@ def get_metrics_df(workflow: str) -> pd.DataFrame:
     df["llm_calls"] = pd.to_numeric(df.get("llm_calls"), errors="coerce")
     df["cached_tokens"] = pd.to_numeric(df.get("cached_tokens"), errors="coerce")
 
+    # Real-dollar cost per query, proprietary models only. We price the measured
+    # prompt/completion token split at each vendor's list price (dataset/
+    # pricing.json). Prompt tokens split into cache-hit vs full-price input: use
+    # the recorded cached_tokens when a run reports any, otherwise assume 60% of
+    # prompt tokens were cache hits (the benchmark repeats a big system prompt).
+    # Models absent from pricing.json (all open-weight, plus any unpriced closed
+    # model) get NaN and never win the "cheapest $" pick.
+    def _numcol(name: str) -> pd.Series:
+        if name in df.columns:
+            return pd.to_numeric(df[name], errors="coerce")
+        return pd.Series([float("nan")] * len(df), index=df.index)
+
+    prompt_tok = _numcol("prompt_tokens")
+    completion_tok = _numcol("completion_tokens")
+    cached_tok_raw = df["cached_tokens"]
+    pricing = _load_pricing()
+
+    def _usd_per_query(model, p_tok, c_tok, cached, nq) -> float:
+        price = pricing.get(str(model))
+        if price is None or nq <= 0 or pd.isna(p_tok) or pd.isna(c_tok):
+            return float("nan")
+        cached_in = cached if (pd.notna(cached) and cached > 0) else _ASSUMED_CACHE_HIT_RATE * p_tok
+        cached_in = min(cached_in, p_tok)             # never exceed total prompt
+        full_in = p_tok - cached_in
+        usd_total = (full_in * price["input"]
+                     + cached_in * price["cached"]
+                     + c_tok * price["output"]) / 1_000_000.0
+        return usd_total / nq
+
+    df["usd_per_query"] = [
+        _usd_per_query(m, p, c, ca, n)
+        for m, p, c, ca, n in zip(
+            df["full_model"], prompt_tok, completion_tok, cached_tok_raw, df["n_queries"]
+        )
+    ]
+
     # Degenerate rows: zero queries or zero tokens (e.g. a model that never
     # ran, like gpt-4o-latest) carry no usable cost — blank the token cell so
     # the matrix leaves it empty rather than drawing a misleading 0.
     degenerate = (df["n_queries"] <= 0) | (df["tokens_per_query"] <= 0)
     df.loc[degenerate, "tokens_per_query"] = pd.NA
+    # A never-run model has ~0 tokens; don't let it read as "$0.00, cheapest".
+    df.loc[degenerate, "usd_per_query"] = pd.NA
 
     # accuracy-per-1k-tokens efficiency metric (KPI card / frontier only).
     tpq = df["tokens_per_query"]

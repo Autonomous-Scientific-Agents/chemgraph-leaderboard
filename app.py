@@ -1,3 +1,4 @@
+import html
 import sys
 import time
 from datetime import datetime, timezone
@@ -688,9 +689,12 @@ def _task_col_names() -> list[str]:
 _AVERAGE_COL = "Average ⬆️"
 _HARDEST_TASK = "Reaction Energy"  # weight-10, historically lowest-scoring
 
-# Highlighted picks: shared between the KPI cards and the frontier markers so
-# both point at the same models. Emoji marks each on the scatter.
-_HIGHLIGHT_EMOJI = {"best": "👑", "eff": "⚡", "cheap": "💰"}
+# Highlighted picks: shared between the KPI cards and the frontier markers.
+#   best = highest accuracy · eff = most accuracy per 1k tokens ·
+#   lean = fewest tokens/query · cost = lowest real $/query at list price ·
+#   hard = best on the hardest task. All five are marked on the scatter and
+#   listed in the frontier's Highlights legend, mirroring the five KPI cards.
+_HIGHLIGHT_EMOJI = {"best": "👑", "eff": "⚡", "lean": "🪙", "cost": "💰", "hard": "🎯"}
 
 # Open-weight vs proprietary is not stored in the data schema; classify by known
 # open model series so the frontier can mark them with a distinct marker shape.
@@ -735,11 +739,14 @@ def _highlights_base(leaderboard_df: pd.DataFrame, metrics_df: pd.DataFrame) -> 
         df["family"] = df["family"].fillna("unknown")
 
     if metrics_df is not None and not metrics_df.empty:
-        m = metrics_df[["full_model", "tokens_per_query", "accuracy_per_1k_tokens", "low_conf"]]
+        _mcols = ["full_model", "tokens_per_query", "accuracy_per_1k_tokens",
+                  "usd_per_query", "low_conf"]
+        m = metrics_df[[c for c in _mcols if c in metrics_df.columns]]
         df = df.merge(m, on="full_model", how="left")
     else:
         df["tokens_per_query"] = pd.NA
         df["accuracy_per_1k_tokens"] = pd.NA
+        df["usd_per_query"] = pd.NA
         df["low_conf"] = False
 
     return df.sort_values(_AVERAGE_COL, ascending=False).reset_index(drop=True)
@@ -752,13 +759,29 @@ def _fmt_tokens(v) -> str:
     return f"{v / 1000:.1f}k"
 
 
+def _fmt_usd(v) -> str:
+    """Dollar cost per query, e.g. 0.0273 -> '$0.027'. Scales decimals so
+    sub-cent costs stay legible."""
+    if v is None or (isinstance(v, float) and pd.isna(v)):
+        return "—"
+    v = float(v)
+    if v >= 1:
+        return f"${v:,.2f}"
+    if v >= 0.01:
+        return f"${v:.3f}"
+    return f"${v:.4f}"
+
+
 def _highlight_picks(base: pd.DataFrame) -> dict:
-    """The three models the KPI cards and the frontier markers both highlight.
+    """The models the KPI cards and the frontier markers highlight.
 
     - "best":  highest overall accuracy, ties broken by FEWEST tokens (so a
                cheaper model wins a tie with an equally-accurate pricier one).
     - "eff":   highest accuracy per 1k tokens.
-    - "cheap": fewest tokens per query.
+    - "lean":  fewest tokens per query (all models — token frugality).
+    - "cost":  lowest real dollar cost per query at list price (proprietary
+               models only; open-weight models carry no price so never win).
+    - "hard":  highest score on the hardest task (Reaction Energy).
     Returns {key: row}; keys missing when the needed data is absent.
     """
     picks: dict = {}
@@ -767,6 +790,8 @@ def _highlight_picks(base: pd.DataFrame) -> dict:
     b = base.copy()
     b["_acc"] = pd.to_numeric(b[_AVERAGE_COL], errors="coerce")
     b["_tok"] = pd.to_numeric(b["tokens_per_query"], errors="coerce")
+    b["_usd"] = (pd.to_numeric(b["usd_per_query"], errors="coerce")
+                 if "usd_per_query" in b.columns else pd.NA)
     # Efficiency from the SAME accuracy shown everywhere (leaderboard Average,
     # 0..100), not the metrics CSV's separate accuracy — keeps the picks
     # internally consistent. Units: accuracy-points per 1k tokens.
@@ -779,23 +804,53 @@ def _highlight_picks(base: pd.DataFrame) -> dict:
     eff = b.dropna(subset=["_eff"])
     if not eff.empty:
         picks["eff"] = eff.loc[eff["_eff"].idxmax()]
-    ch = b.dropna(subset=["_tok"])
-    if not ch.empty:
-        picks["cheap"] = ch.loc[ch["_tok"].idxmin()]
+    lean = b.dropna(subset=["_tok"])
+    if not lean.empty:
+        picks["lean"] = lean.loc[lean["_tok"].idxmin()]
+    cost = b.dropna(subset=["_usd"])
+    if not cost.empty:
+        picks["cost"] = cost.loc[cost["_usd"].idxmin()]
+    if _HARDEST_TASK in b.columns:
+        b["_hard"] = pd.to_numeric(b[_HARDEST_TASK], errors="coerce")
+        hard = b.dropna(subset=["_hard"])
+        if not hard.empty:
+            picks["hard"] = hard.loc[hard["_hard"].idxmax()]
     return picks
 
 
+# One-line explanation shown on hover (the ⓘ glyph's title=) for each KPI card.
+_KPI_DESC = {
+    "best": "Highest average accuracy across all 12 tasks. Ties broken by fewer "
+            "tokens per query.",
+    "eff":  "Accuracy points earned per 1,000 tokens — the best accuracy-for-"
+            "tokens trade-off. ",
+    "lean": "Lowest average token consumption per query. Ranks every model "
+            "(open-weight and proprietary) — this is about token volume, not money.",
+    "cost": "Lowest real API dollar cost per query at vendors' public list "
+            "prices (input, cached input, and output priced separately). "
+            "Proprietary models only — open-weight models run on local hardware "
+            "and have no API price.",
+    "hard": "Highest score on the hardest task (Reaction Energy), historically "
+            "the lowest-scoring category.",
+}
+
+
 def build_kpi_strip(leaderboard_df: pd.DataFrame, metrics_df: pd.DataFrame) -> str:
-    """Four headline KPI cards as a single HTML block (no Plotly)."""
+    """Five headline KPI cards as a single HTML block (no Plotly). Each card's
+    label carries an ⓘ glyph whose hover tooltip explains the metric."""
     base = _highlights_base(leaderboard_df, metrics_df)
     if base.empty:
         return '<div class="cg-kpi-strip"><div class="cg-kpi-empty">No data available.</div></div>'
 
-    def card(label: str, value: str, model: str, sub: str = "") -> str:
+    def card(label: str, value: str, model: str, sub: str = "", desc: str = "") -> str:
+        info = ""
+        if desc:
+            info = (f' <span class="cg-kpi-info" tabindex="0" '
+                    f'title="{html.escape(desc, quote=True)}">&#9432;</span>')
         sub_html = f'<div class="cg-kpi-sub">{sub}</div>' if sub else ""
         return (
             '<div class="cg-kpi-card">'
-            f'<div class="cg-kpi-label">{label}</div>'
+            f'<div class="cg-kpi-label">{label}{info}</div>'
             f'<div class="cg-kpi-value">{value}</div>'
             f'<div class="cg-kpi-model">{model}</div>'
             f'{sub_html}'
@@ -810,33 +865,46 @@ def build_kpi_strip(leaderboard_df: pd.DataFrame, metrics_df: pd.DataFrame) -> s
         row = picks["best"]
         sub = f"{_fmt_tokens(row['tokens_per_query'])} tok/q" if pd.notna(row.get("tokens_per_query")) else ""
         cards.append(card(f"{_HIGHLIGHT_EMOJI['best']} Best overall",
-                          f"{row[_AVERAGE_COL]:.0f}%", row["display"], sub))
+                          f"{row[_AVERAGE_COL]:.0f}%", row["display"], sub,
+                          _KPI_DESC["best"]))
 
     # Most efficient (max accuracy per 1k tokens, using leaderboard accuracy).
     if "eff" in picks:
         row = picks["eff"]
         cards.append(card(f"{_HIGHLIGHT_EMOJI['eff']} Most efficient",
                           f"{row['_eff']:.1f}", row["display"],
-                          "accuracy pts / 1k tokens"))
+                          "accuracy pts / 1k tokens", _KPI_DESC["eff"]))
     else:
-        cards.append(card(f"{_HIGHLIGHT_EMOJI['eff']} Most efficient", "—", "no token data"))
+        cards.append(card(f"{_HIGHLIGHT_EMOJI['eff']} Most efficient", "—",
+                          "no token data", "", _KPI_DESC["eff"]))
 
-    # Cheapest per query (min tokens).
-    if "cheap" in picks:
-        row = picks["cheap"]
-        cards.append(card(f"{_HIGHLIGHT_EMOJI['cheap']} Cheapest / query",
+    # Fewest tokens per query (token frugality — all models). Was "Cheapest /
+    # query"; renamed because it measures token volume, not money.
+    if "lean" in picks:
+        row = picks["lean"]
+        cards.append(card(f"{_HIGHLIGHT_EMOJI['lean']} Fewest tokens",
                           _fmt_tokens(row["tokens_per_query"]), row["display"],
-                          "avg tokens per query"))
+                          "avg tokens / query", _KPI_DESC["lean"]))
     else:
-        cards.append(card(f"{_HIGHLIGHT_EMOJI['cheap']} Cheapest / query", "—", "no token data"))
+        cards.append(card(f"{_HIGHLIGHT_EMOJI['lean']} Fewest tokens", "—",
+                          "no token data", "", _KPI_DESC["lean"]))
+
+    # Cheapest by real dollars (proprietary models only, list-price cost/query).
+    if "cost" in picks:
+        row = picks["cost"]
+        cards.append(card(f"{_HIGHLIGHT_EMOJI['cost']} Cheapest ($)",
+                          _fmt_usd(row["usd_per_query"]), row["display"],
+                          "$ / query · list price", _KPI_DESC["cost"]))
+    else:
+        cards.append(card(f"{_HIGHLIGHT_EMOJI['cost']} Cheapest ($)", "—",
+                          "no pricing data", "", _KPI_DESC["cost"]))
 
     # Best on hardest task (Reaction Energy)
-    if _HARDEST_TASK in base.columns:
-        hard = base.dropna(subset=[_HARDEST_TASK])
-        if not hard.empty:
-            row = hard.loc[hard[_HARDEST_TASK].idxmax()]
-            cards.append(card("Best on hardest", f"{row[_HARDEST_TASK]:.0f}%",
-                              row["display"], _HARDEST_TASK))
+    if "hard" in picks:
+        row = picks["hard"]
+        cards.append(card(f"{_HIGHLIGHT_EMOJI['hard']} Best on hardest",
+                          f"{row[_HARDEST_TASK]:.0f}%",
+                          row["display"], _HARDEST_TASK, _KPI_DESC["hard"]))
 
     return f'<div class="cg-kpi-strip">{"".join(cards)}</div>'
 
@@ -1021,11 +1089,14 @@ def build_efficiency_frontier(leaderboard_df: pd.DataFrame, metrics_df: pd.DataF
             hovertemplate="%{text}<br>%{y:.0f}%  ·  %{x:,.0f} tok/q<extra></extra>",
         ))
 
-    # Mark the three highlighted picks (same models as the KPI cards) with an
-    # emoji just left of their marker. Stack emojis if one model wins twice.
+    # Mark the highlighted picks (the same five as the KPI cards) with an emoji
+    # just left of their marker. Stack emojis if one model wins more than one.
+    # Every pick's model has a point here (each has token data), so all five —
+    # including the dollar-cost and hardest-task winners — are shown and mirrored
+    # in the Highlights legend below.
     picks = _highlight_picks(base_full)
     by_point: dict = {}
-    for key in ("best", "eff", "cheap"):
+    for key in ("best", "eff", "lean", "cost", "hard"):
         row = picks.get(key)
         if row is None:
             continue
@@ -1101,7 +1172,9 @@ def build_efficiency_frontier(leaderboard_df: pd.DataFrame, metrics_df: pd.DataF
     _leg_title("Highlights")
     _leg_row(_HIGHLIGHT_EMOJI["best"], "#334155", "Best overall", gpx=15)
     _leg_row(_HIGHLIGHT_EMOJI["eff"], "#334155", "Most efficient", gpx=15)
-    _leg_row(_HIGHLIGHT_EMOJI["cheap"], "#334155", "Cheapest", gpx=15)
+    _leg_row(_HIGHLIGHT_EMOJI["lean"], "#334155", "Fewest tokens", gpx=15)
+    _leg_row(_HIGHLIGHT_EMOJI["cost"], "#334155", "Cheapest ($)", gpx=15)
+    _leg_row(_HIGHLIGHT_EMOJI["hard"], "#334155", "Best on hardest", gpx=15)
 
     if n_dropped:
         fig.add_annotation(

@@ -763,6 +763,23 @@ custom_css = """
     color: var(--cg-text-muted);
     margin-top: 0.1rem;
 }
+/* Info glyph next to a KPI label — hover (or focus) shows the native tooltip
+   from its title= attribute explaining what the metric means. */
+.cg-kpi-info {
+    display: inline-block;
+    color: var(--cg-text-muted);
+    opacity: 0.7;
+    cursor: help;
+    font-size: 0.72rem;
+    vertical-align: super;
+    line-height: 1;
+    outline: none;
+}
+.cg-kpi-info:hover,
+.cg-kpi-info:focus {
+    opacity: 1;
+    color: var(--cg-primary);
+}
 .cg-kpi-empty {
     color: var(--cg-text-muted);
     padding: 1rem;
