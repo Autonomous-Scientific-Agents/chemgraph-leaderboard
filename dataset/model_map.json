@@ -31,6 +31,10 @@
   "argo:gpt-5.1": "openai/gpt-5.1",
   "argo:gpt-5.2": "openai/gpt-5.2",
   "argo:gpt-5.4": "openai/gpt-5.4",
+  "argo:gpt-5.5": "openai/gpt-5.5",
+  "argo:gpt-5.6-luna": "openai/gpt-5.6-luna",
+  "argo:gpt-5.6-sol": "openai/gpt-5.6-sol",
+  "argo:gpt-5.6-terra": "openai/gpt-5.6-terra",
   "argo:o1": "openai/o1",
   "argo:o3": "openai/o3",
   "argo:o3-mini": "openai/o3-mini",
@@ -39,8 +43,15 @@
   "argo:claude-opus-4.1": "anthropic/claude-opus-4.1",
   "argo:claude-opus-4.5": "anthropic/claude-opus-4.5",
   "argo:claude-opus-4.6": "anthropic/claude-opus-4.6",
+  "argo:claude-opus-4.7": "anthropic/claude-opus-4.7",
+  "argo:claude-opus-4.8": "anthropic/claude-opus-4.8",
   "argo:claude-sonnet-4": "anthropic/claude-sonnet-4",
   "argo:claude-sonnet-4.5": "anthropic/claude-sonnet-4.5",
+  "argo:claude-sonnet-4.6": "anthropic/claude-sonnet-4.6",
+  "argo:claude-sonnet-5": "anthropic/claude-sonnet-5",
   "argo:claude-haiku-3.5": "anthropic/claude-3.5-haiku",
-  "argo:claude-haiku-4.5": "anthropic/claude-4.5-haiku"
+  "argo:claude-haiku-4.5": "anthropic/claude-4.5-haiku",
+  "argo:gemini-2.5-flash": "google/gemini-2.5-flash",
+  "argo:gemini-2.5-pro": "google/gemini-2.5-pro",
+  "argo:gemini-3.5-flash": "google/gemini-3.5-flash"
 }

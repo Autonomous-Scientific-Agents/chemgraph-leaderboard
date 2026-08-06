@@ -122,6 +122,16 @@ def parse_args() -> argparse.Namespace:
         default="main",
         help="Value for config.model_sha in results JSON.",
     )
+    p.add_argument(
+        "--eval-date",
+        default=None,
+        help=(
+            "Override the YYYY-MM-DD used for config.eval_date and the "
+            "results_<date>.json filename. Without it the date comes from the "
+            "benchmark file's own timestamp, which splits a run that straddles "
+            "midnight across two dates."
+        ),
+    )
     args = p.parse_args()
     if args.all and args.benchmark_file:
         p.error("--all and --benchmark-file are mutually exclusive")
@@ -342,6 +352,7 @@ def process_benchmark_file(
     requests_outdir: Path,
     model_dtype: str,
     default_sha: str,
+    eval_date_override: Optional[str] = None,
 ) -> int:
     """Process a single benchmark JSON file and write leaderboard-format output.
 
@@ -374,6 +385,13 @@ def process_benchmark_file(
     # Fallback: use current UTC date
     if eval_date is None:
         eval_date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+    # An explicit override wins. A single eval campaign can straddle midnight —
+    # the multi_agent half of a run started on the 4th may not finish until the
+    # 5th — and filing the two workflows under different dates makes one run
+    # look like two. --eval-date files the whole campaign under one date.
+    if eval_date_override:
+        eval_date = eval_date_override
 
     processed = 0
     for short_name, model_data in results.items():
@@ -485,6 +503,7 @@ def main() -> None:
             requests_outdir=args.requests_outdir,
             model_dtype=args.model_dtype,
             default_sha=args.default_sha,
+            eval_date_override=args.eval_date,
         )
         total_processed += processed
 
