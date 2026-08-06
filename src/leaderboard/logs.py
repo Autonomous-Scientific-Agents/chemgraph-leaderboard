@@ -25,8 +25,33 @@ import html
 import json
 from pathlib import Path
 
-from src.about import Tasks
+from src.about import _LOGO_URI, Tasks
 from src.envs import LOGS_REPO, TOKEN
+from src.leaderboard.trace_model import build_trace, content_text
+from src.leaderboard.trace_render import (
+    render_crash,
+    render_minimap,
+    render_raw_transcript,
+    render_summary,
+    render_tree,
+)
+
+# Above this much raw transcript text in one panel, the collapsed raw-transcript
+# duplicate is what makes the payload heavy — cap that, not the graph.
+_BIG_PANEL_CHARS = 150_000
+
+# The panel header. Static, so it lives here next to the renderer rather than as
+# a literal in app.py.
+LOG_PANEL_HEAD_HTML = (
+    '<div class="cg-drawer-head">'
+    + (f'<img class="cg-drawer-mark" src="{_LOGO_URI}" alt="">' if _LOGO_URI else "")
+    + '<div class="cg-drawer-titles">'
+    '<div class="cg-drawer-title">Execution trace</div>'
+    '<div class="cg-drawer-sub">per-query agent run for the selected model &amp; task</div>'
+    "</div>"
+    '<button id="cg-logpanel-close" class="cg-drawer-close" aria-label="Close">&#10005;</button>'
+    "</div>"
+)
 
 # Repo root = three levels up (src/leaderboard/logs.py).
 _REPO_ROOT = Path(__file__).resolve().parent.parent.parent
@@ -83,107 +108,54 @@ _EMPTY_HTML = (
 
 
 def _err(msg: str) -> str:
+    # msg may carry intentional <b> markup; callers escape their own interpolations.
     return f'<div class="cg-log-empty">{msg}</div>'
 
 
-def _esc(v) -> str:
-    """Escape any value for HTML text; dicts/lists are pretty-printed JSON."""
-    if isinstance(v, (dict, list)):
-        v = json.dumps(v, indent=2, ensure_ascii=False)
-    elif not isinstance(v, str):
-        v = str(v)
-    return html.escape(v)
-
-
-def _content_text(content) -> str:
-    """LangChain message content may be a string or a list of blocks."""
-    if isinstance(content, list):
-        parts = []
-        for block in content:
-            if isinstance(block, dict):
-                parts.append(str(block.get("text", block.get("type", ""))))
-            else:
-                parts.append(str(block))
-        return "\n".join(p for p in parts if p)
-    return content if isinstance(content, str) else ("" if content is None else str(content))
-
-
-def _render_message(m: dict) -> str:
-    """One transcript message -> an HTML block."""
-    role = m.get("type") or m.get("role") or "?"
-    label = {"human": "User", "ai": "Assistant", "tool": "Tool", "system": "System"}.get(
-        role, role
-    )
-    tool_name = m.get("name")
-    if role == "tool" and tool_name:
-        label = f"Tool · {html.escape(str(tool_name))}"
-
-    body_parts = []
-    text = _content_text(m.get("content"))
-    if text.strip():
-        body_parts.append(f'<pre class="cg-msg-text">{html.escape(text)}</pre>')
-
-    # Assistant tool calls (the model deciding to call a tool).
-    for tc in m.get("tool_calls") or []:
-        name = html.escape(str(tc.get("name", "?")))
-        args = _esc(tc.get("args", {}))
-        body_parts.append(
-            f'<div class="cg-tool-call">&rarr; <b>{name}</b>'
-            f'<pre class="cg-msg-text">{args}</pre></div>'
-        )
-
-    if not body_parts:
-        body_parts.append('<span class="cg-msg-empty">(no content)</span>')
-
-    return (
-        f'<div class="cg-msg cg-msg-{html.escape(role)}">'
-        f'<span class="cg-msg-role">{html.escape(label)}</span>'
-        f'<div class="cg-msg-body">{"".join(body_parts)}</div></div>'
-    )
-
-
-def _render_query(judge: dict, tokens: dict | None, state: dict | None) -> str:
-    """One query -> a collapsible <details> card."""
+def _render_query(
+    judge: dict,
+    tokens: dict | None,
+    thread: dict | None,
+    workflow: str,
+    crash: str,
+    raw_cap: int,
+    *,
+    open_card: bool = False,
+) -> str:
+    """One query -> a collapsible card holding its execution graph."""
     qid = str(judge.get("query_id", "?"))
-    query = _content_text(judge.get("query", ""))
+    query = content_text(judge.get("query", ""))
     parse_error = judge.get("parse_error")
     passed = bool(judge.get("score")) and not parse_error
+
     badge = (
         '<span class="cg-qbadge cg-qbadge-pass">&#10003;</span>'
         if passed
         else '<span class="cg-qbadge cg-qbadge-fail">&#10007;</span>'
     )
-    q_short = query if len(query) <= 90 else query[:90] + "…"
+    q_short = query if len(query) <= 110 else query[:110] + "\u2026"
     summary = (
         f'<summary class="cg-q-summary">{badge}'
         f'<span class="cg-q-id">Q{html.escape(qid)}</span>'
         f'<span class="cg-q-text">{html.escape(q_short)}</span></summary>'
     )
 
-    rows = []
-    rows.append(f'<div class="cg-q-field"><b>Query</b><pre>{html.escape(query)}</pre></div>')
+    rows = [f'<div class="cg-q-field"><b>Query</b><pre>{html.escape(query)}</pre></div>']
 
+    # A judge score of 0 on a healthy trace is a *semantic* miss (wrong number,
+    # missing field) — it belongs here on the query, never on a graph node.
     rationale = judge.get("rationale")
     if rationale:
-        rows.append(
-            f'<div class="cg-q-field"><b>Judge rationale</b>'
-            f'<pre>{html.escape(str(rationale))}</pre></div>'
-        )
-    if parse_error:
-        rows.append(
-            f'<div class="cg-q-field"><b>Parse error</b>'
-            f'<pre>{html.escape(str(parse_error))}</pre></div>'
-        )
+        rows.append(f'<div class="cg-q-field"><b>Judge rationale</b><pre>{html.escape(str(rationale))}</pre></div>')
     field_scores = judge.get("field_scores")
     if field_scores:
         chips = "".join(
             f'<span class="cg-chip cg-chip-{"ok" if v else "no"}">'
-            f'{html.escape(str(k))}: {"✓" if v else "✗"}</span>'
+            f'{html.escape(str(k))}: {"&#10003;" if v else "&#10007;"}</span>'
             for k, v in field_scores.items()
         )
         rows.append(f'<div class="cg-q-field"><b>Field scores</b><div>{chips}</div></div>')
 
-    # Token / timing chips (from detail.per_query_results), best-effort.
     if tokens:
         tu = tokens.get("token_usage") or {}
         ti = tokens.get("timing") or {}
@@ -195,28 +167,48 @@ def _render_query(judge: dict, tokens: dict | None, state: dict | None) -> str:
         if ti.get("agent_wall_s") is not None:
             bits.append(f'{ti["agent_wall_s"]:.1f}s')
         if bits:
-            rows.append(
-                '<div class="cg-q-meta">'
-                + " · ".join(html.escape(b) for b in bits)
-                + "</div>"
-            )
+            rows.append('<div class="cg-q-meta">' + " &middot; ".join(html.escape(b) for b in bits) + "</div>")
 
-    # Transcript.
-    if state is None:
-        rows.append('<div class="cg-q-field"><b>Transcript</b>'
-                    '<div class="cg-msg-empty">(transcript unavailable)</div></div>')
+    trace = build_trace(thread, workflow, crash_reason=crash)
+    if not trace.ok:
+        rows.append(render_crash(trace, str(parse_error or "")))
     else:
-        msgs = (state.get("state") or {}).get("messages") or []
-        # Skip the leading human turn — it repeats the query shown above.
-        body = "".join(
-            _render_message(m)
-            for i, m in enumerate(msgs)
-            if not (i == 0 and (m.get("type") or m.get("role")) == "human")
+        rows.append(render_summary(trace))
+        rows.append(render_minimap(trace))
+        rows.append(
+            '<div class="cg-tr-bar">'
+            '<button type="button" class="cg-tr-btn" data-cg-tr-all="open">Expand all</button>'
+            '<button type="button" class="cg-tr-btn" data-cg-tr-all="close">Collapse all</button></div>'
         )
-        rows.append(f'<div class="cg-q-field"><b>Transcript</b>'
-                    f'<div class="cg-transcript">{body or "(empty)"}</div></div>')
+        rows.append(render_tree(trace))
+        rows.append(render_raw_transcript(thread, cap=raw_cap))
 
-    return f'<details class="cg-q">{summary}<div class="cg-q-body">{"".join(rows)}</div></details>'
+    return (
+        f'<details class="cg-q"{" open" if open_card else ""}>{summary}'
+        f'<div class="cg-q-body">{"".join(rows)}</div></details>'
+    )
+
+
+def _thread_for(workflow: str, key: str, qid: str) -> dict | None:
+    """``state_thread_<N>.json`` where N = query_id - 1 (query_id is 1-based)."""
+    try:
+        n = int(qid) - 1
+    except (TypeError, ValueError):
+        return None
+    return _fetch(workflow, key, f"state_thread_{n}.json")
+
+
+def _crash_reason(detail: dict, qid: str) -> str:
+    """Transport-level error for a query whose run never wrote a transcript.
+
+    ``raw_tool_calls`` is index-aligned with ``query_id - 1`` and its ``result``
+    holds the raw provider failure (timeout, 403, connection error).
+    """
+    try:
+        raw = detail.get("raw_tool_calls") or []
+        return str(raw[int(qid) - 1].get("result") or "").strip()
+    except (TypeError, ValueError, IndexError, AttributeError):
+        return ""
 
 
 def render_log_panel(payload: str) -> str:
@@ -235,49 +227,61 @@ def render_log_panel(payload: str) -> str:
     key = _safe_name(full_model)
     detail = _fetch(workflow, key, "detail.json")
     if detail is None:
-        return _err(
-            f"No logs found for <b>{html.escape(full_model)}</b> "
-            f"({html.escape(workflow)})."
-        )
+        return _err(f"No logs found for <b>{html.escape(full_model)}</b> ({html.escape(workflow)}).")
 
-    judges = [
-        j for j in detail.get("structured_judge_results", [])
-        if j.get("category") == bench
-    ]
+    judges = [j for j in detail.get("structured_judge_results", []) if j.get("category") == bench]
     if not judges:
-        return _err(
-            f"No <b>{html.escape(col_name)}</b> queries logged for "
-            f"<b>{html.escape(full_model)}</b>."
-        )
+        return _err(f"No <b>{html.escape(col_name)}</b> queries logged for <b>{html.escape(full_model)}</b>.")
 
     # per_query_results carries tokens/timing; key by query_id for a safe join.
     per_query = {}
     for pq in detail.get("per_query_results", []):
-        qid = (pq.get("token_usage") or {}).get("query_id") or (
-            pq.get("timing") or {}
-        ).get("query_id")
+        qid = (pq.get("token_usage") or {}).get("query_id") or (pq.get("timing") or {}).get("query_id")
         if qid is not None:
             per_query[str(qid)] = pq
 
+    # Fetch every transcript up front so the panel can size itself before
+    # rendering (see _BIG_PANEL_CHARS). _fetch is cached, so this is not extra I/O.
+    threads = {str(j.get("query_id", "")): _thread_for(workflow, key, str(j.get("query_id", ""))) for j in judges}
+    bulk = sum(
+        len(m.get("content") or "")
+        for t in threads.values()
+        if t
+        for m in ((t.get("state") or {}).get("messages") or [])
+        if isinstance(m.get("content"), str)
+    )
+    # The tree already shows every message; past this size the *duplicate* raw
+    # transcript is what blows the payload up, so cap that rather than the graph.
+    raw_cap = 800 if bulk > _BIG_PANEL_CHARS else 0
+
     n_pass = sum(1 for j in judges if bool(j.get("score")) and not j.get("parse_error"))
+    n_crash = sum(1 for j in judges if j.get("parse_error"))
+    pills = [
+        f'<span class="cg-lp-pill">{html.escape(col_name)}</span>',
+        f'<span class="cg-lp-pill">{html.escape(workflow.replace("_", "-"))}</span>',
+        f'<span class="cg-lp-pill cg-lp-pill-ok">{n_pass}/{len(judges)} passed</span>',
+    ]
+    if n_crash:
+        pills.append(f'<span class="cg-lp-pill cg-lp-pill-bad">{n_crash} crashed</span>')
     header = (
         f'<div class="cg-log-head">'
         f'<div class="cg-log-model">{html.escape(full_model)}</div>'
-        f'<div class="cg-log-sub">{html.escape(col_name)} · '
-        f'{html.escape(workflow.replace("_", "-"))} · '
-        f'{n_pass}/{len(judges)} passed</div></div>'
+        f'<div class="cg-lp-pills">{"".join(pills)}</div></div>'
     )
 
     cards = []
-    for j in judges:
+    for i, j in enumerate(judges):
         qid = str(j.get("query_id", ""))
-        # N = query_id - 1 (query_id is 1-based, state_thread index is 0-based).
-        state = None
-        try:
-            n = int(qid) - 1
-            state = _fetch(workflow, key, f"state_thread_{n}.json")
-        except (TypeError, ValueError):
-            pass
-        cards.append(_render_query(j, per_query.get(qid), state))
+        cards.append(
+            _render_query(
+                j,
+                per_query.get(qid),
+                threads.get(qid),
+                workflow,
+                _crash_reason(detail, qid),
+                raw_cap,
+                open_card=(i == 0),
+            )
+        )
 
     return header + '<div class="cg-log-list">' + "".join(cards) + "</div>"

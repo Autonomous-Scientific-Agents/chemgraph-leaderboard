@@ -57,7 +57,7 @@ from src.populate import (
 )
 from src.submission.submit import add_new_eval
 from src.submission.submit_task import add_new_task, build_task_status_view
-from src.leaderboard.logs import render_log_panel, _EMPTY_HTML
+from src.leaderboard.logs import render_log_panel, LOG_PANEL_HEAD_HTML, _EMPTY_HTML
 
 # --local flag: skip HF Hub downloads and scheduler, use local data only.
 LOCAL_MODE = "--local" in sys.argv
@@ -1763,11 +1763,10 @@ with demo:
         elem_classes=["cg-vh"],
     )
     with gr.Column(elem_id="cg-logpanel-drawer", elem_classes="cg-drawer"):
-        gr.HTML(
-            '<div class="cg-drawer-head"><span>Log details</span>'
-            '<button id="cg-logpanel-close" class="cg-drawer-close" '
-            'aria-label="Close">✕</button></div>'
-        )
+        # elem_classes so the CSS can pin Gradio's own .block wrapper: it defaults
+        # to `flex: 0 1 auto` and would otherwise shrink the header to a sliver
+        # once the modal hits its max-height.
+        gr.HTML(LOG_PANEL_HEAD_HTML, elem_classes=["cg-drawer-headwrap"])
         log_panel_html = gr.HTML(_EMPTY_HTML, elem_id="cg-logpanel-body")
     log_panel_input.input(
         fn=render_log_panel, inputs=log_panel_input, outputs=log_panel_html

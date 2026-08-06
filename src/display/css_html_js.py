@@ -25,6 +25,19 @@ custom_css = """
     --cg-radius-sm: 8px;
     --cg-gradient: linear-gradient(135deg, #1e40af 0%, #0d9488 100%);
     --cg-gradient-subtle: linear-gradient(135deg, #eff6ff 0%, #f0fdfa 100%);
+    /* Graph node roles. Light values are the existing 9-colour categorical
+       ramp (see .cg-tool-tags below) so the whole app shares one palette. */
+    --cg-role-user: #2563eb;
+    --cg-role-planner: #7c3aed;
+    --cg-role-exec: #0891b2;
+    --cg-role-agent: #0d9488;
+    --cg-role-tool: #d97706;
+    --cg-role-answer: #16a34a;
+    --cg-role-format: #65a30d;
+    --cg-role-err: #dc2626;
+    /* Molecular line-art shared by the site banner and the log-panel header
+       so the two cannot drift apart. */
+    --cg-banner-art: url("data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20width%3D%27374%27%20height%3D%27274%27%20viewBox%3D%2744%2020%20374%20274%27%3E%3Cg%20fill%3D%27none%27%20stroke%3D%27rgba%28255%2C255%2C255%2C0.18%29%27%20stroke-width%3D%273%27%20stroke-linecap%3D%27round%27%3E%3Cpath%20d%3D%27M290%20150%20L250%20219%20L170%20219%20L130%20150%20L170%2081%20L250%2081%20Z%27%2F%3E%3Cpath%20d%3D%27M290%20150%20L360%20150%20L400%20108%27%2F%3E%3Cpath%20d%3D%27M250%2081%20L290%2034%27%2F%3E%3Cpath%20d%3D%27M170%20219%20L138%20278%27%2F%3E%3Cpath%20d%3D%27M130%20150%20L58%20150%27%2F%3E%3Cpath%20d%3D%27M243%2092%20L201%2092%27%2F%3E%3C%2Fg%3E%3Cg%20fill%3D%27rgba%28255%2C255%2C255%2C0.27%29%27%3E%3Ccircle%20cx%3D%27290%27%20cy%3D%27150%27%20r%3D%278%27%2F%3E%3Ccircle%20cx%3D%27250%27%20cy%3D%27219%27%20r%3D%278%27%2F%3E%3Ccircle%20cx%3D%27170%27%20cy%3D%27219%27%20r%3D%278%27%2F%3E%3Ccircle%20cx%3D%27130%27%20cy%3D%27150%27%20r%3D%278%27%2F%3E%3Ccircle%20cx%3D%27170%27%20cy%3D%2781%27%20r%3D%278%27%2F%3E%3Ccircle%20cx%3D%27250%27%20cy%3D%2781%27%20r%3D%278%27%2F%3E%3Ccircle%20cx%3D%27360%27%20cy%3D%27150%27%20r%3D%278%27%2F%3E%3Ccircle%20cx%3D%27400%27%20cy%3D%27108%27%20r%3D%278%27%2F%3E%3Ccircle%20cx%3D%27290%27%20cy%3D%2734%27%20r%3D%278%27%2F%3E%3Ccircle%20cx%3D%27138%27%20cy%3D%27278%27%20r%3D%278%27%2F%3E%3Ccircle%20cx%3D%2758%27%20cy%3D%27150%27%20r%3D%278%27%2F%3E%3C%2Fg%3E%3C%2Fsvg%3E");
 }
 
 .dark {
@@ -45,6 +58,14 @@ custom_css = """
     --cg-shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.4), 0 4px 6px -4px rgba(0, 0, 0, 0.25);
     --cg-gradient: linear-gradient(135deg, #1e3a8a 0%, #065f46 100%);
     --cg-gradient-subtle: linear-gradient(135deg, #1e293b 0%, #0f2027 100%);
+    --cg-role-user: #60a5fa;
+    --cg-role-planner: #a78bfa;
+    --cg-role-exec: #22d3ee;
+    --cg-role-agent: #2dd4bf;
+    --cg-role-tool: #fbbf24;
+    --cg-role-answer: #4ade80;
+    --cg-role-format: #a3e635;
+    --cg-role-err: #f87171;
 }
 
 /* ============================================================
@@ -55,8 +76,8 @@ custom_css = """
        two molecular line-art fragments partially shown at the top-left and
        bottom-right (chemistry atmosphere). Glossy top highlight via inset. */
     background:
-        url("data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20width%3D%27374%27%20height%3D%27274%27%20viewBox%3D%2744%2020%20374%20274%27%3E%3Cg%20fill%3D%27none%27%20stroke%3D%27rgba%28255%2C255%2C255%2C0.18%29%27%20stroke-width%3D%273%27%20stroke-linecap%3D%27round%27%3E%3Cpath%20d%3D%27M290%20150%20L250%20219%20L170%20219%20L130%20150%20L170%2081%20L250%2081%20Z%27%2F%3E%3Cpath%20d%3D%27M290%20150%20L360%20150%20L400%20108%27%2F%3E%3Cpath%20d%3D%27M250%2081%20L290%2034%27%2F%3E%3Cpath%20d%3D%27M170%20219%20L138%20278%27%2F%3E%3Cpath%20d%3D%27M130%20150%20L58%20150%27%2F%3E%3Cpath%20d%3D%27M243%2092%20L201%2092%27%2F%3E%3C%2Fg%3E%3Cg%20fill%3D%27rgba%28255%2C255%2C255%2C0.27%29%27%3E%3Ccircle%20cx%3D%27290%27%20cy%3D%27150%27%20r%3D%278%27%2F%3E%3Ccircle%20cx%3D%27250%27%20cy%3D%27219%27%20r%3D%278%27%2F%3E%3Ccircle%20cx%3D%27170%27%20cy%3D%27219%27%20r%3D%278%27%2F%3E%3Ccircle%20cx%3D%27130%27%20cy%3D%27150%27%20r%3D%278%27%2F%3E%3Ccircle%20cx%3D%27170%27%20cy%3D%2781%27%20r%3D%278%27%2F%3E%3Ccircle%20cx%3D%27250%27%20cy%3D%2781%27%20r%3D%278%27%2F%3E%3Ccircle%20cx%3D%27360%27%20cy%3D%27150%27%20r%3D%278%27%2F%3E%3Ccircle%20cx%3D%27400%27%20cy%3D%27108%27%20r%3D%278%27%2F%3E%3Ccircle%20cx%3D%27290%27%20cy%3D%2734%27%20r%3D%278%27%2F%3E%3Ccircle%20cx%3D%27138%27%20cy%3D%27278%27%20r%3D%278%27%2F%3E%3Ccircle%20cx%3D%2758%27%20cy%3D%27150%27%20r%3D%278%27%2F%3E%3C%2Fg%3E%3C%2Fsvg%3E") no-repeat left -85px top -55px / 260px auto,
-        url("data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20width%3D%27374%27%20height%3D%27274%27%20viewBox%3D%2744%2020%20374%20274%27%3E%3Cg%20fill%3D%27none%27%20stroke%3D%27rgba%28255%2C255%2C255%2C0.18%29%27%20stroke-width%3D%273%27%20stroke-linecap%3D%27round%27%3E%3Cpath%20d%3D%27M290%20150%20L250%20219%20L170%20219%20L130%20150%20L170%2081%20L250%2081%20Z%27%2F%3E%3Cpath%20d%3D%27M290%20150%20L360%20150%20L400%20108%27%2F%3E%3Cpath%20d%3D%27M250%2081%20L290%2034%27%2F%3E%3Cpath%20d%3D%27M170%20219%20L138%20278%27%2F%3E%3Cpath%20d%3D%27M130%20150%20L58%20150%27%2F%3E%3Cpath%20d%3D%27M243%2092%20L201%2092%27%2F%3E%3C%2Fg%3E%3Cg%20fill%3D%27rgba%28255%2C255%2C255%2C0.27%29%27%3E%3Ccircle%20cx%3D%27290%27%20cy%3D%27150%27%20r%3D%278%27%2F%3E%3Ccircle%20cx%3D%27250%27%20cy%3D%27219%27%20r%3D%278%27%2F%3E%3Ccircle%20cx%3D%27170%27%20cy%3D%27219%27%20r%3D%278%27%2F%3E%3Ccircle%20cx%3D%27130%27%20cy%3D%27150%27%20r%3D%278%27%2F%3E%3Ccircle%20cx%3D%27170%27%20cy%3D%2781%27%20r%3D%278%27%2F%3E%3Ccircle%20cx%3D%27250%27%20cy%3D%2781%27%20r%3D%278%27%2F%3E%3Ccircle%20cx%3D%27360%27%20cy%3D%27150%27%20r%3D%278%27%2F%3E%3Ccircle%20cx%3D%27400%27%20cy%3D%27108%27%20r%3D%278%27%2F%3E%3Ccircle%20cx%3D%27290%27%20cy%3D%2734%27%20r%3D%278%27%2F%3E%3Ccircle%20cx%3D%27138%27%20cy%3D%27278%27%20r%3D%278%27%2F%3E%3Ccircle%20cx%3D%2758%27%20cy%3D%27150%27%20r%3D%278%27%2F%3E%3C%2Fg%3E%3C%2Fsvg%3E") no-repeat right -98px bottom -72px / 285px auto,
+        var(--cg-banner-art) no-repeat left -85px top -55px / 260px auto,
+        var(--cg-banner-art) no-repeat right -98px bottom -72px / 285px auto,
         radial-gradient(900px 440px at 86% -22%, rgba(147, 197, 253, 0.50), transparent 60%),
         radial-gradient(760px 420px at 6% 122%, rgba(37, 99, 235, 0.42), transparent 55%),
         linear-gradient(125deg, #1e40af 0%, #2563eb 52%, #3b82f6 100%);
@@ -1310,10 +1331,11 @@ custom_css = """
 #cg-logpanel-scrim {
     position: fixed;
     inset: 0;
-    background: rgba(15, 23, 42, 0.45);
+    background: rgba(15, 23, 42, 0.55);
+    backdrop-filter: blur(2px);
     opacity: 0;
     pointer-events: none;
-    transition: opacity 0.25s ease;
+    transition: opacity 0.22s ease;
     z-index: 1000;
 }
 #cg-logpanel-scrim.cg-open {
@@ -1321,17 +1343,29 @@ custom_css = """
     pointer-events: auto;
 }
 
+/* Centred modal. The scrim sits underneath at z-index 1000, so a click on the
+   margin around the modal lands on the scrim and the existing close handler in
+   wireCellClicks() fires unchanged. */
 #cg-logpanel-drawer {
     position: fixed;
-    top: 0;
-    right: 0;
-    height: 100vh;
-    width: min(600px, 94vw);
+    top: 50%;
+    left: 50%;
+    width: min(1200px, 98vw);
+    max-height: 92vh;
+    height: auto !important;
     background: var(--cg-surface);
-    border-left: 1px solid var(--cg-border);
-    box-shadow: var(--cg-shadow-lg);
-    transform: translateX(101%);
-    transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+    border: 1px solid var(--cg-border);
+    border-radius: var(--cg-radius);
+    box-shadow: var(--cg-shadow-lg), 0 24px 60px -12px rgba(15, 23, 42, 0.35);
+    transform: translate(-50%, -50%) scale(0.97);
+    /* visibility (not just opacity) so the close button and every <summary>
+       inside leave the tab order while the modal is shut. */
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition: opacity 0.18s ease,
+                transform 0.22s cubic-bezier(0.4, 0, 0.2, 1),
+                visibility 0s linear 0.22s;
     z-index: 1001;
     display: flex !important;
     flex-direction: column;
@@ -1340,38 +1374,110 @@ custom_css = """
     overflow: hidden;
 }
 #cg-logpanel-drawer.cg-open {
-    transform: translateX(0);
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+    transition-delay: 0s;
 }
+@media (max-width: 720px) {
+    #cg-logpanel-drawer {
+        width: 100vw;
+        max-height: 100vh;
+        border-radius: 0;
+        border: 0;
+    }
+}
+/* Set by openLogDrawer() so the page behind the modal doesn't scroll. */
+html.cg-modal-open, html.cg-modal-open body { overflow: hidden; }
 
+/* Matches #cg-title-banner: same 3-stop 125deg blue ramp, same radial blooms
+   (retuned for a ~60px strip), same molecular art, same inset gloss. Like the
+   site banner this deliberately uses literal hex and does NOT flip in dark mode
+   — the old var(--cg-gradient) did flip, which is exactly the mismatch this
+   fixes. Don't "restore" it. */
 .cg-drawer-head {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    padding: 14px 18px;
-    font-weight: 600;
-    font-size: 15px;
+    gap: 14px;
+    padding: 15px 20px;
+    flex: 0 0 auto;
     color: #ffffff;
-    background: var(--cg-gradient);
+    position: relative;
+    overflow: hidden;
+    background:
+        var(--cg-banner-art) no-repeat left -46px top -34px / 150px auto,
+        var(--cg-banner-art) no-repeat right -52px bottom -46px / 165px auto,
+        radial-gradient(620px 300px at 88% -70%, rgba(147, 197, 253, 0.48), transparent 62%),
+        radial-gradient(520px 260px at 4% 175%, rgba(37, 99, 235, 0.42), transparent 58%),
+        linear-gradient(125deg, #1e40af 0%, #2563eb 52%, #3b82f6 100%);
+    box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.20),
+                0 1px 0 0 rgba(15, 23, 42, 0.10);
 }
+/* Gradio wraps every gr.HTML in a .block (flex: 0 1 auto, overflow: auto) plus a
+   padded .html-container. Inside the modal's flex column that block shrinks to a
+   ~26px sliver and clips the header. Pin it and strip the chrome so the gradient
+   sits flush against the modal's top corners. */
+#cg-logpanel-drawer .cg-drawer-headwrap {
+    flex: 0 0 auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+}
+#cg-logpanel-drawer .cg-drawer-headwrap .html-container,
+#cg-logpanel-drawer .cg-drawer-headwrap .prose { padding: 0 !important; margin: 0 !important; }
+/* Same treatment for the body's inner container — the block itself already
+   carries the panel padding via #cg-logpanel-body. */
+#cg-logpanel-body > .html-container,
+#cg-logpanel-body > .html-container > .prose { padding: 0 !important; margin: 0 !important; }
+
+.cg-drawer-head > * { position: relative; z-index: 1; }
+.cg-drawer-mark {
+    flex: 0 0 auto;
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    background: #ffffff;
+    padding: 4px;
+    box-sizing: border-box;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.18);
+}
+.cg-drawer-titles { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.cg-drawer-title {
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
+}
+.cg-drawer-sub { font-size: 11.5px; color: rgba(255, 255, 255, 0.82); }
 .cg-drawer-close {
-    background: rgba(255, 255, 255, 0.18);
-    border: none;
+    margin-left: auto;
+    background: rgba(255, 255, 255, 0.15);
+    backdrop-filter: blur(4px);
+    border: 1px solid rgba(255, 255, 255, 0.22);
     color: #ffffff;
-    width: 28px;
-    height: 28px;
-    border-radius: 6px;
+    width: 30px;
+    height: 30px;
+    border-radius: 999px;
     cursor: pointer;
     font-size: 15px;
     line-height: 1;
     transition: background 0.15s ease;
 }
-.cg-drawer-close:hover { background: rgba(255, 255, 255, 0.35); }
+.cg-drawer-close:hover { background: rgba(255, 255, 255, 0.32); }
 
 #cg-logpanel-body {
     flex: 1 1 auto;
     min-height: 0;
     overflow-y: auto;
-    padding: 16px 18px 48px;
+    overscroll-behavior: contain;
+    padding: 16px 20px 28px;
+    background: var(--cg-surface-alt);
 }
 
 .cg-log-empty {
@@ -1400,7 +1506,9 @@ custom_css = """
 details.cg-q {
     border: 1px solid var(--cg-border);
     border-radius: var(--cg-radius-sm);
-    background: var(--cg-surface-alt);
+    /* surface, not surface-alt: the modal body is now alt-tinted, so cards need
+       to sit *above* it rather than blend into it. */
+    background: var(--cg-surface);
     overflow: hidden;
 }
 .cg-q-summary {
@@ -1456,6 +1564,7 @@ details.cg-q {
     margin-bottom: 3px;
 }
 .cg-q-field pre,
+.cg-tr-pre,
 .cg-msg-text {
     white-space: pre-wrap;
     word-break: break-word;
@@ -1504,6 +1613,256 @@ details.cg-q {
 .cg-msg-body { display: flex; flex-direction: column; gap: 4px; }
 .cg-tool-call { font-size: 12px; color: var(--cg-text-secondary); }
 .cg-msg-empty { font-size: 12px; color: var(--cg-text-muted); font-style: italic; }
+
+/* ============================================================
+   EXECUTION GRAPH (log panel): minimap + trace tree
+   Rendered server-side by src/leaderboard/trace_render.py.
+   Node colour arrives as an inline `--role` custom property, so these rules
+   never need to know about roles or error states — same trick as the
+   `--tag` pattern on .cg-tool-tags above.
+   ============================================================ */
+
+/* --- minimap ------------------------------------------------ */
+.cg-mm-wrap {
+    background: var(--cg-surface-alt);
+    border: 1px solid var(--cg-border-light);
+    border-radius: var(--cg-radius-sm);
+    padding: 8px 10px 6px;
+    margin-bottom: 12px;
+    overflow-x: auto;
+}
+.cg-mm-cap {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--cg-text-muted);
+    margin-bottom: 6px;
+}
+.cg-mm-svg { display: block; }
+.cg-tr-warnnote {
+    margin-left: 8px;
+    padding: 1px 7px;
+    border-radius: 999px;
+    background: rgba(217, 119, 6, 0.14);
+    color: var(--cg-role-tool, #d97706);
+    text-transform: none;
+    letter-spacing: 0;
+    cursor: help;
+}
+
+/* Role colour, set once per node as a class rather than an inline style — the
+   renderer picks exactly one of these (status beats kind), so there is no
+   specificity contest, and it saves ~30 bytes on every node in a 700-node trace. */
+.cg-r-user    { --role: var(--cg-role-user, #2563eb); }
+.cg-r-planner { --role: var(--cg-role-planner, #7c3aed); }
+.cg-r-exec    { --role: var(--cg-role-exec, #0891b2); }
+.cg-r-agent   { --role: var(--cg-role-agent, #0d9488); }
+.cg-r-tool    { --role: var(--cg-role-tool, #d97706); }
+.cg-r-answer  { --role: var(--cg-role-answer, #16a34a); }
+.cg-r-format  { --role: var(--cg-role-format, #65a30d); }
+.cg-r-err     { --role: var(--cg-role-err, #dc2626); }
+.cg-r-warn    { --role: var(--cg-role-tool, #d97706); }
+.cg-r-muted   { --role: var(--cg-text-muted, #94a3b8); }
+
+/* --- panel header pills ------------------------------------- */
+.cg-lp-pills { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 5px; }
+.cg-lp-pill {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 2px 9px;
+    border-radius: 999px;
+    background: var(--cg-surface-hover);
+    color: var(--cg-text-secondary);
+    border: 1px solid var(--cg-border);
+}
+.cg-lp-pill-ok {
+    background: rgba(13, 148, 136, 0.14);
+    color: var(--cg-accent);
+    border-color: rgba(13, 148, 136, 0.3);
+}
+.cg-lp-pill-bad {
+    background: rgba(220, 38, 38, 0.12);
+    color: var(--cg-role-err, #dc2626);
+    border-color: rgba(220, 38, 38, 0.28);
+}
+
+/* --- expand/collapse bar ------------------------------------ */
+.cg-tr-bar { display: flex; gap: 6px; margin: 0 0 8px; }
+.cg-tr-btn {
+    background: var(--cg-surface);
+    color: var(--cg-primary);
+    border: 1px solid var(--cg-border);
+    border-radius: var(--cg-radius-sm);
+    font-size: 11.5px;
+    font-weight: 600;
+    padding: 3px 10px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+.cg-tr-btn:hover { background: var(--cg-primary); color: #ffffff; border-color: var(--cg-primary); }
+
+/* --- tree: one rail recipe, recurses to any depth ----------- */
+.cg-tr, .cg-tr-tools { display: flex; flex-direction: column; }
+.cg-tr-tools { margin-top: 6px; }
+
+.cg-tr-item, .cg-tr-fan {
+    position: relative;
+    padding-left: 22px;
+    padding-bottom: 8px;
+}
+.cg-tr-item::before, .cg-tr-fan::before {
+    content: "";
+    position: absolute;
+    left: 6px;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: var(--cg-border);
+}
+/* Last sibling: stop the rail at its own dot instead of dangling past it. */
+.cg-tr-item:last-child::before, .cg-tr-fan:last-child::before { bottom: auto; height: 16px; }
+.cg-tr-item::after, .cg-tr-fan::after {
+    content: "";
+    position: absolute;
+    left: 1px;
+    top: 10px;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: var(--cg-surface);
+    border: 2.5px solid var(--role, var(--cg-text-muted));
+}
+
+.cg-tr-node { border-radius: var(--cg-radius-sm); }
+.cg-tr-sum {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 5px 8px;
+    cursor: pointer;
+    list-style: none;
+    user-select: none;
+    border-radius: var(--cg-radius-sm);
+    font-size: 13px;
+}
+.cg-tr-sum::-webkit-details-marker { display: none; }
+.cg-tr-sum:hover { background: var(--cg-surface-hover); }
+.cg-tr-role {
+    flex: 0 0 auto;
+    font-size: 9.5px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 2px 7px;
+    border-radius: 999px;
+    color: var(--role, var(--cg-text-muted));
+    background: color-mix(in srgb, var(--role, #94a3b8) 13%, transparent);
+    border: 1px solid color-mix(in srgb, var(--role, #94a3b8) 30%, transparent);
+}
+.cg-tr-name { font-weight: 600; color: var(--cg-text-primary); }
+.cg-tr-tag {
+    font-size: 10.5px;
+    font-weight: 600;
+    padding: 1px 7px;
+    border-radius: 999px;
+}
+.cg-tr-tag-err { background: rgba(220, 38, 38, 0.12); color: var(--cg-role-err, #dc2626); }
+.cg-tr-tag-warn { background: rgba(217, 119, 6, 0.14); color: var(--cg-role-tool, #d97706); }
+.cg-tr-count, .cg-tr-meta { font-size: 11px; color: var(--cg-text-muted); }
+.cg-tr-meta { margin-left: auto; padding-left: 8px; }
+
+.cg-tr-body { padding: 2px 0 4px 8px; }
+.cg-tr-field { margin-bottom: 7px; }
+.cg-tr-field > b {
+    display: block;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--cg-text-muted);
+    margin-bottom: 3px;
+}
+.cg-tr-pre { max-height: 340px; overflow: auto; }
+.cg-tr-none { font-size: 12px; color: var(--cg-text-muted); font-style: italic; padding: 2px 0; }
+.cg-tr-sub > summary { font-size: 11.5px; color: var(--cg-text-muted); cursor: pointer; margin: 4px 0; }
+.cg-tr-kv {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 3px 12px;
+    margin: 0 0 6px;
+    font-size: 12.5px;
+}
+.cg-tr-kv dt { font-weight: 600; color: var(--cg-text-secondary); }
+.cg-tr-kv dd { margin: 0; color: var(--cg-text-primary); word-break: break-word; }
+
+/* --- fan-out lanes ------------------------------------------ */
+.cg-tr-fanhead {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--cg-text-muted);
+    margin: 3px 0 8px;
+}
+.cg-tr-lane {
+    position: relative;
+    margin: 0 0 10px 14px;
+    padding: 9px 12px 2px;
+    background: var(--cg-surface);
+    border: 1px solid var(--cg-border);
+    border-left: 3px solid var(--role, var(--cg-text-muted));
+    border-radius: var(--cg-radius-sm);
+    box-shadow: var(--cg-shadow-sm);
+}
+/* Elbow from the fan trunk into each lane card. */
+.cg-tr-lane::before {
+    content: "";
+    position: absolute;
+    left: -14px;
+    top: 20px;
+    width: 14px;
+    height: 2px;
+    background: var(--cg-border);
+}
+.cg-tr-lanehead { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+.cg-tr-lanetag {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--role, var(--cg-text-secondary));
+}
+.cg-tr-lanemeta { font-size: 11px; color: var(--cg-text-muted); }
+.cg-tr-task > summary {
+    font-size: 11.5px;
+    color: var(--cg-text-muted);
+    cursor: pointer;
+    margin-bottom: 4px;
+}
+
+/* --- crash card + raw fallback ------------------------------ */
+.cg-tr-crash {
+    border: 1px solid rgba(220, 38, 38, 0.35);
+    background: rgba(220, 38, 38, 0.06);
+    border-radius: var(--cg-radius-sm);
+    padding: 10px 12px;
+}
+.cg-tr-crash-h {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--cg-role-err, #dc2626);
+    margin-bottom: 6px;
+}
+.cg-tr-crash-s { font-size: 11.5px; color: var(--cg-text-secondary); margin-top: 6px; }
+.cg-tr-raw { margin-top: 10px; border-top: 1px dashed var(--cg-border); padding-top: 8px; }
+.cg-tr-raw > summary {
+    font-size: 11.5px;
+    color: var(--cg-text-muted);
+    cursor: pointer;
+    user-select: none;
+}
+.cg-tr-raw > summary:hover { color: var(--cg-primary); }
+.cg-tr-raw .cg-transcript { margin-top: 8px; }
 
 """
 
@@ -1774,12 +2133,20 @@ group_columns_head = r"""
     const s = document.getElementById("cg-logpanel-scrim");
     if (d) d.classList.add("cg-open");
     if (s) s.classList.add("cg-open");
+    // Lock the page behind the modal, and start the new panel at the top rather
+    // than wherever the previous one was scrolled to.
+    document.documentElement.classList.add("cg-modal-open");
+    const b = document.getElementById("cg-logpanel-body");
+    if (b) b.scrollTop = 0;
+    const c = document.getElementById("cg-logpanel-close");
+    if (c) requestAnimationFrame(() => c.focus());
   }
   function closeLogDrawer() {
     const d = document.getElementById("cg-logpanel-drawer");
     const s = document.getElementById("cg-logpanel-scrim");
     if (d) d.classList.remove("cg-open");
     if (s) s.classList.remove("cg-open");
+    document.documentElement.classList.remove("cg-modal-open");
   }
 
   function wireCellClicks() {
@@ -1840,6 +2207,23 @@ group_columns_head = r"""
     });
   }
 
+  // Expand/collapse every step in one query card. Delegated on document because
+  // the panel HTML is replaced wholesale on each click, so anything bound to the
+  // buttons themselves would be thrown away. Leaves the raw-transcript <details>
+  // alone — that one stays collapsed on purpose.
+  function wireTraceControls() {
+    if (window.__cgTraceHooked) return;
+    window.__cgTraceHooked = true;
+    document.addEventListener("click", e => {
+      const btn = e.target.closest("[data-cg-tr-all]");
+      if (!btn) return;
+      const open = btn.getAttribute("data-cg-tr-all") === "open";
+      const scope = btn.closest(".cg-q") || document.getElementById("cg-logpanel-body");
+      if (!scope) return;
+      scope.querySelectorAll("details.cg-tr-node").forEach(d => { d.open = open; });
+    });
+  }
+
   function pass() {
     const cols = findColumnSelectorContainers();
     const fils = findModelFamilyContainers();
@@ -1847,6 +2231,7 @@ group_columns_head = r"""
     upgradeDateInputs();
     wireTabClickResize();
     wireCellClicks();
+    wireTraceControls();
   }
 
   let pending = false;
