@@ -57,6 +57,7 @@ from src.populate import (
 )
 from src.submission.submit import add_new_eval
 from src.submission.submit_task import add_new_task, build_task_status_view
+from src.leaderboard.logs import render_log_panel, _EMPTY_HTML
 
 # --local flag: skip HF Hub downloads and scheduler, use local data only.
 LOCAL_MODE = "--local" in sys.argv
@@ -1259,7 +1260,16 @@ with demo:
                         elem_classes="cg-viewall-btn",
                     )
                 with gr.TabItem("📊 Full table", id=full_tab_idx) as full_tab:
-                    init_leaderboard(df)
+                    # gradio_leaderboard's Leaderboard does NOT forward
+                    # elem_id/elem_classes to the DOM, so wrap it in a Column
+                    # that does: the click bridge (css_html_js.py:wireCellClicks)
+                    # scopes the table via `.cg-leaderboard` and reads the
+                    # workflow from this id (cg-single-* / cg-multi-*).
+                    with gr.Column(
+                        elem_id=f"{base_elem_id}-fulltable",
+                        elem_classes=["cg-leaderboard"],
+                    ):
+                        init_leaderboard(df)
             view_all_btn.click(
                 fn=lambda: gr.Tabs(selected=full_tab_idx), outputs=subtabs
             )
@@ -1733,6 +1743,35 @@ with demo:
           # Refresh the status board right after a successful submission so the
           # contributor sees their new task appear (as "under review").
           submit_task_button.click(fn=build_task_status_view, outputs=task_status_view)
+
+    # --- Per-cell log-detail drawer (Full table) ---------------------------
+    # Lives at the top level of the Blocks (outside the Tabs) so the fixed-
+    # position drawer overlays the whole page. The click bridge in
+    # css_html_js.py:wireCellClicks() writes "{workflow}|||{full_model}|||{col}"
+    # into the hidden textbox; its .input() renders the panel HTML, then JS
+    # slides the drawer in from the right.
+    gr.HTML('<div id="cg-logpanel-scrim"></div>')
+    # NOTE: must be a *rendered* (visible=True) component — Gradio 5 omits
+    # visible=False components from the DOM entirely, so the JS bridge would
+    # have nothing to write into. We keep it in the DOM and hide it via the
+    # `cg-vh` (visually-hidden) CSS class so its `.input()` event still fires.
+    log_panel_input = gr.Textbox(
+        value="",
+        show_label=False,
+        container=False,
+        elem_id="cg-logpanel-input",
+        elem_classes=["cg-vh"],
+    )
+    with gr.Column(elem_id="cg-logpanel-drawer", elem_classes="cg-drawer"):
+        gr.HTML(
+            '<div class="cg-drawer-head"><span>Log details</span>'
+            '<button id="cg-logpanel-close" class="cg-drawer-close" '
+            'aria-label="Close">✕</button></div>'
+        )
+        log_panel_html = gr.HTML(_EMPTY_HTML, elem_id="cg-logpanel-body")
+    log_panel_input.input(
+        fn=render_log_panel, inputs=log_panel_input, outputs=log_panel_html
+    )
 
     gr.Markdown(INTRODUCTION_TEXT, elem_classes="markdown-text", elem_id="cg-intro-block")
 

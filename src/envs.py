@@ -17,12 +17,16 @@ QUEUE_DATASET = os.environ.get("CG_QUEUE_DATASET", "requests")
 RESULTS_DATASET = os.environ.get("CG_RESULTS_DATASET", "results")
 # Community-contributed eval tasks (harbor-style task bundles) live here.
 TASKS_DATASET = os.environ.get("CG_TASKS_DATASET", "community-tasks")
+# Per-query eval logs (state_thread transcripts + judge detail), fetched lazily
+# when a user clicks a task cell in the Full table.
+LOGS_DATASET = os.environ.get("CG_LOGS_DATASET", "logs")
 # ----------------------------------
 
 REPO_ID = f"{OWNER}/{SPACE_NAME}"
 QUEUE_REPO = f"{OWNER}/{QUEUE_DATASET}"
 RESULTS_REPO = f"{OWNER}/{RESULTS_DATASET}"
 TASKS_REPO = f"{OWNER}/{TASKS_DATASET}"
+LOGS_REPO = f"{OWNER}/{LOGS_DATASET}"
 
 # If you setup a cache later, just change HF_HOME
 CACHE_PATH = os.getenv("HF_HOME", ".")

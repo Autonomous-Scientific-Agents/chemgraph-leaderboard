@@ -1286,6 +1286,225 @@ custom_css = """
     }
 }
 
+/* ============================================================
+   LOG-DETAIL DRAWER (Full table per-cell click)
+   Slides in from the right when a task-accuracy cell is clicked;
+   wired by css_html_js.py:wireCellClicks() + app.py hidden textbox.
+   ============================================================ */
+/* Visually-hidden bridge textbox: kept in the DOM (Gradio 5 drops
+   visible=False components entirely) but removed from view/layout so the
+   JS bridge can set its value and fire its `input` event. */
+.cg-vh {
+    position: absolute !important;
+    width: 1px !important;
+    height: 1px !important;
+    padding: 0 !important;
+    margin: -1px !important;
+    overflow: hidden !important;
+    clip: rect(0, 0, 0, 0) !important;
+    white-space: nowrap !important;
+    border: 0 !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+}
+#cg-logpanel-scrim {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.45);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.25s ease;
+    z-index: 1000;
+}
+#cg-logpanel-scrim.cg-open {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+#cg-logpanel-drawer {
+    position: fixed;
+    top: 0;
+    right: 0;
+    height: 100vh;
+    width: min(600px, 94vw);
+    background: var(--cg-surface);
+    border-left: 1px solid var(--cg-border);
+    box-shadow: var(--cg-shadow-lg);
+    transform: translateX(101%);
+    transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+    z-index: 1001;
+    display: flex !important;
+    flex-direction: column;
+    gap: 0 !important;
+    padding: 0 !important;
+    overflow: hidden;
+}
+#cg-logpanel-drawer.cg-open {
+    transform: translateX(0);
+}
+
+.cg-drawer-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 18px;
+    font-weight: 600;
+    font-size: 15px;
+    color: #ffffff;
+    background: var(--cg-gradient);
+}
+.cg-drawer-close {
+    background: rgba(255, 255, 255, 0.18);
+    border: none;
+    color: #ffffff;
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 15px;
+    line-height: 1;
+    transition: background 0.15s ease;
+}
+.cg-drawer-close:hover { background: rgba(255, 255, 255, 0.35); }
+
+#cg-logpanel-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 16px 18px 48px;
+}
+
+.cg-log-empty {
+    color: var(--cg-text-muted);
+    font-size: 14px;
+    text-align: center;
+    padding: 40px 20px;
+    line-height: 1.6;
+}
+
+.cg-log-head { margin-bottom: 14px; }
+.cg-log-model {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--cg-text-primary);
+    word-break: break-all;
+}
+.cg-log-sub {
+    font-size: 12.5px;
+    color: var(--cg-text-secondary);
+    margin-top: 2px;
+}
+
+.cg-log-list { display: flex; flex-direction: column; gap: 8px; }
+
+details.cg-q {
+    border: 1px solid var(--cg-border);
+    border-radius: var(--cg-radius-sm);
+    background: var(--cg-surface-alt);
+    overflow: hidden;
+}
+.cg-q-summary {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 9px 12px;
+    cursor: pointer;
+    font-size: 13px;
+    list-style: none;
+    user-select: none;
+}
+.cg-q-summary::-webkit-details-marker { display: none; }
+.cg-q-summary:hover { background: var(--cg-surface-hover); }
+.cg-qbadge {
+    flex: 0 0 auto;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: 700;
+    color: #ffffff;
+}
+.cg-qbadge-pass { background: var(--cg-accent); }
+.cg-qbadge-fail { background: #dc2626; }
+.cg-q-id {
+    flex: 0 0 auto;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 11px;
+    color: var(--cg-text-muted);
+}
+.cg-q-text {
+    flex: 1 1 auto;
+    color: var(--cg-text-primary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.cg-q-body {
+    padding: 10px 12px 12px;
+    border-top: 1px solid var(--cg-border);
+}
+.cg-q-field { margin-bottom: 10px; }
+.cg-q-field > b {
+    display: block;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--cg-text-muted);
+    margin-bottom: 3px;
+}
+.cg-q-field pre,
+.cg-msg-text {
+    white-space: pre-wrap;
+    word-break: break-word;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 12px;
+    line-height: 1.45;
+    background: var(--cg-surface);
+    border: 1px solid var(--cg-border-light);
+    border-radius: 6px;
+    padding: 7px 9px;
+    margin: 0;
+    color: var(--cg-text-primary);
+}
+.cg-q-meta {
+    font-size: 11.5px;
+    color: var(--cg-text-secondary);
+    margin-bottom: 10px;
+}
+.cg-chip {
+    display: inline-block;
+    font-size: 11px;
+    padding: 1px 7px;
+    border-radius: 10px;
+    margin: 2px 4px 2px 0;
+}
+.cg-chip-ok { background: rgba(13, 148, 136, 0.14); color: var(--cg-accent); }
+.cg-chip-no { background: rgba(220, 38, 38, 0.12); color: #dc2626; }
+
+.cg-transcript { display: flex; flex-direction: column; gap: 6px; }
+.cg-msg {
+    border-left: 3px solid var(--cg-border);
+    padding: 4px 0 4px 10px;
+}
+.cg-msg-human { border-left-color: var(--cg-primary-light); }
+.cg-msg-ai { border-left-color: var(--cg-accent); }
+.cg-msg-tool { border-left-color: var(--cg-text-muted); }
+.cg-msg-role {
+    display: block;
+    font-size: 10.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    font-weight: 600;
+    color: var(--cg-text-secondary);
+    margin-bottom: 3px;
+}
+.cg-msg-body { display: flex; flex-direction: column; gap: 4px; }
+.cg-tool-call { font-size: 12px; color: var(--cg-text-secondary); }
+.cg-msg-empty { font-size: 12px; color: var(--cg-text-muted); font-style: italic; }
+
 """
 
 get_window_url_params = """
@@ -1533,12 +1752,101 @@ group_columns_head = r"""
     }, true);
   }
 
+  // --- Log-detail drawer: bridge a Full-table task-cell click to Python -----
+  // Clicking a per-task accuracy number opens a right-hand drawer with that
+  // (model, workflow, category)'s per-query logs. We compute the column at
+  // click time (sort/filter/hide safe) and, if it's a task column, push
+  // "{workflow}|||{full_model}|||{colName}" into a hidden Gradio textbox whose
+  // .input() handler (app.py) renders the panel HTML.
+  function setNativeValue(el, value) {
+    // Svelte/Gradio only reacts to the value setter + a bubbling 'input'
+    // event, not to a plain el.value = ... assignment.
+    const proto = el.tagName === "TEXTAREA"
+      ? window.HTMLTextAreaElement.prototype
+      : window.HTMLInputElement.prototype;
+    const setter = Object.getOwnPropertyDescriptor(proto, "value").set;
+    setter.call(el, value);
+    el.dispatchEvent(new Event("input", { bubbles: true }));
+  }
+
+  function openLogDrawer() {
+    const d = document.getElementById("cg-logpanel-drawer");
+    const s = document.getElementById("cg-logpanel-scrim");
+    if (d) d.classList.add("cg-open");
+    if (s) s.classList.add("cg-open");
+  }
+  function closeLogDrawer() {
+    const d = document.getElementById("cg-logpanel-drawer");
+    const s = document.getElementById("cg-logpanel-scrim");
+    if (d) d.classList.remove("cg-open");
+    if (s) s.classList.remove("cg-open");
+  }
+
+  function wireCellClicks() {
+    if (window.__cgCellHooked) return;
+    window.__cgCellHooked = true;
+
+    document.addEventListener("click", e => {
+      // Close controls first.
+      if (e.target.closest("#cg-logpanel-close") ||
+          e.target.id === "cg-logpanel-scrim") {
+        closeLogDrawer();
+        return;
+      }
+
+      const td = e.target.closest("td");
+      if (!td) return;
+      const scope = td.closest(".cg-leaderboard");
+      if (!scope) return;                       // only the Full-table leaderboard
+      const table = td.closest("table");
+      const row = td.closest("tr");
+      if (!table || !row) return;
+
+      const colIdx = Array.from(row.children).indexOf(td);
+      if (colIdx < 0) return;
+      const heads = Array.from(table.querySelectorAll("thead th"));
+      const colName = heads[colIdx] ? labelOf(heads[colIdx]) : "";
+      if (!TASK_COLS.has(colName)) return;      // ignore Model / rank / avg / etc.
+
+      // Model = the cell under the "Model" header; take its link target.
+      const modelIdx = heads.findIndex(h => labelOf(h) === "Model");
+      if (modelIdx < 0) return;
+      const modelCell = row.children[modelIdx];
+      if (!modelCell) return;
+      const a = modelCell.querySelector("a[href]");
+      let fullModel = a
+        ? a.getAttribute("href").replace(/^https?:\/\/huggingface\.co\//, "")
+        : labelOf(modelCell);
+      fullModel = (fullModel || "").trim();
+      if (!fullModel) return;
+
+      // Workflow from the leaderboard's elem_id (cg-single* / cg-multi*).
+      const wf = scope.closest('[id^="cg-single"]') ? "single_agent"
+               : scope.closest('[id^="cg-multi"]')  ? "multi_agent"
+               : (scope.id && scope.id.indexOf("cg-multi") === 0 ? "multi_agent"
+                  : scope.id && scope.id.indexOf("cg-single") === 0 ? "single_agent"
+                  : null);
+      if (!wf) return;
+
+      const input = document.querySelector(
+        "#cg-logpanel-input textarea, #cg-logpanel-input input");
+      if (!input) return;
+      setNativeValue(input, wf + "|||" + fullModel + "|||" + colName);
+      openLogDrawer();
+    }, true);
+
+    document.addEventListener("keydown", e => {
+      if (e.key === "Escape") closeLogDrawer();
+    });
+  }
+
   function pass() {
     const cols = findColumnSelectorContainers();
     const fils = findModelFamilyContainers();
     pairColAndMF(cols, fils).forEach(([c, f]) => reshape(c, f));
     upgradeDateInputs();
     wireTabClickResize();
+    wireCellClicks();
   }
 
   let pending = false;
