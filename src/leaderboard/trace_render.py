@@ -417,20 +417,34 @@ def _step_html(step, open_default: bool = False) -> str:
     if step.children:
         kids = f'<div class="cg-tr-tools">{"".join(_step_html(c) for c in step.children)}</div>'
 
-    return (
-        f'<div class="cg-tr-item {rcls}">'
-        f'<details class="cg-tr-node"{" open" if open_default else ""}>'
-        f'<summary class="cg-tr-sum">'
+    row = (
         f'<span class="cg-tr-role">{esc(role)}</span>'
         f'<span class="cg-tr-name">{esc(step.label)}</span>'
         f"{_tag_html(step)}{kid_note}{_step_meta(step)}"
-        f"</summary>"
-        f'<div class="cg-tr-body">{"".join(body_parts)}</div>'
-        f"</details>{kids}</div>"
     )
+    body = "".join(body_parts)
+    if not body:
+        # 78% of tool-dispatch turns carry no prose at all. Rendering those as a
+        # <details> gives a disclosure arrow that opens onto nothing, so emit a
+        # plain row instead — the node still marks the turn, it just doesn't lie
+        # about having something inside.
+        inner = f'<div class="cg-tr-sum cg-tr-flat">{row}</div>'
+    else:
+        inner = (
+            f'<details class="cg-tr-node"{" open" if open_default else ""}>'
+            f'<summary class="cg-tr-sum">{row}</summary>'
+            f'<div class="cg-tr-body">{body}</div></details>'
+        )
+    return f'<div class="cg-tr-item {rcls}">{inner}{kids}</div>'
 
 
 def _branch_html(branch) -> str:
+    """One executor lane — a <details> so a 10-branch fan-out stays navigable.
+
+    Collapsed by default: the minimap already shows the topology, and ten
+    expanded branches bury the rest of the trace. The summary therefore has to
+    carry enough to triage without opening — step/tool counts and a status mark.
+    """
     lcls = "cg-r-err" if branch.status == ERR else "cg-r-exec"
     steps = "".join(_step_html(s) for s in branch.steps)
     if not steps:
@@ -442,12 +456,21 @@ def _branch_html(branch) -> str:
             f'<pre class="cg-tr-pre">{esc(branch.task)}</pre></details>'
         )
     meta = f'{len(branch.steps)} step{"s" if len(branch.steps) != 1 else ""} · {branch.n_tools} tools'
+    if branch.status == ERR:
+        mark = '<span class="cg-tr-lanemark cg-tr-lanemark-bad">&#10007;</span>'
+    elif branch.status == WARN:
+        mark = '<span class="cg-tr-lanemark cg-tr-lanemark-warn">!</span>'
+    else:
+        mark = '<span class="cg-tr-lanemark cg-tr-lanemark-ok">&#10003;</span>'
+    # First line of the dispatch prompt, so a collapsed lane still says what it did.
+    gist = f'<span class="cg-tr-lanegist">{esc(_clip(branch.task, 72))}</span>' if branch.task.strip() else ""
     return (
-        f'<div class="cg-tr-lane {lcls}">'
-        f'<div class="cg-tr-lanehead">'
+        f'<details class="cg-tr-lane {lcls}">'
+        f'<summary class="cg-tr-lanehead">{mark}'
         f'<span class="cg-tr-lanetag">{esc(branch.label)}</span>'
-        f'<span class="cg-tr-lanemeta">{esc(meta)}</span></div>'
-        f"{task}{steps}</div>"
+        f"{gist}"
+        f'<span class="cg-tr-lanemeta">{esc(meta)}</span></summary>'
+        f"{task}{steps}</details>"
     )
 
 

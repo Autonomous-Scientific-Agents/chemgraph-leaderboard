@@ -1449,6 +1449,7 @@ html.cg-modal-open, html.cg-modal-open body { overflow: hidden; }
 }
 .cg-drawer-titles { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
 .cg-drawer-title {
+    color: #ffffff;
     font-size: 15px;
     font-weight: 700;
     letter-spacing: -0.01em;
@@ -1748,6 +1749,9 @@ details.cg-q {
 }
 .cg-tr-sum::-webkit-details-marker { display: none; }
 .cg-tr-sum:hover { background: var(--cg-surface-hover); }
+/* A turn with nothing inside it is a plain row, not a fake disclosure. */
+.cg-tr-flat { cursor: default; }
+.cg-tr-flat:hover { background: transparent; }
 .cg-tr-role {
     flex: 0 0 auto;
     font-size: 9.5px;
@@ -1824,15 +1828,67 @@ details.cg-q {
     height: 2px;
     background: var(--cg-border);
 }
-.cg-tr-lanehead { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+.cg-tr-lanehead {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    user-select: none;
+    list-style: none;
+    margin: -2px -4px 0;
+    padding: 2px 4px;
+    border-radius: 6px;
+}
+.cg-tr-lanehead::-webkit-details-marker { display: none; }
+.cg-tr-lanehead:hover { background: var(--cg-surface-hover); }
+/* Caret so a collapsed lane reads as openable. */
+.cg-tr-lanehead::before {
+    content: "";
+    flex: 0 0 auto;
+    width: 0;
+    height: 0;
+    border-left: 4.5px solid var(--cg-text-muted);
+    border-top: 3.5px solid transparent;
+    border-bottom: 3.5px solid transparent;
+    transition: transform 0.15s ease;
+}
+details.cg-tr-lane[open] > .cg-tr-lanehead::before { transform: rotate(90deg); }
+details.cg-tr-lane[open] > .cg-tr-lanehead { margin-bottom: 4px; }
 .cg-tr-lanetag {
+    flex: 0 0 auto;
     font-size: 11px;
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.04em;
     color: var(--role, var(--cg-text-secondary));
 }
-.cg-tr-lanemeta { font-size: 11px; color: var(--cg-text-muted); }
+.cg-tr-lanemark {
+    flex: 0 0 auto;
+    width: 15px;
+    height: 15px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 9.5px;
+    font-weight: 700;
+    color: #ffffff;
+}
+.cg-tr-lanemark-ok { background: var(--cg-accent); }
+.cg-tr-lanemark-bad { background: var(--cg-role-err, #dc2626); }
+.cg-tr-lanemark-warn { background: var(--cg-role-tool, #d97706); }
+/* The dispatch gist keeps a collapsed lane informative; it must be the part
+   that gives way when the row is tight. */
+.cg-tr-lanegist {
+    flex: 1 1 auto;
+    min-width: 0;
+    font-size: 11.5px;
+    color: var(--cg-text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.cg-tr-lanemeta { flex: 0 0 auto; margin-left: auto; font-size: 11px; color: var(--cg-text-muted); }
 .cg-tr-task > summary {
     font-size: 11.5px;
     color: var(--cg-text-muted);
@@ -2220,7 +2276,9 @@ group_columns_head = r"""
       const open = btn.getAttribute("data-cg-tr-all") === "open";
       const scope = btn.closest(".cg-q") || document.getElementById("cg-logpanel-body");
       if (!scope) return;
-      scope.querySelectorAll("details.cg-tr-node").forEach(d => { d.open = open; });
+      // Executor lanes too, otherwise "Collapse all" leaves the fan-out open.
+      scope.querySelectorAll("details.cg-tr-node, details.cg-tr-lane")
+           .forEach(d => { d.open = open; });
     });
   }
 

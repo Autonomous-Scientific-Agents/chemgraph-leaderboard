@@ -236,17 +236,21 @@ def _tool_result_step(name: str, args: str, j: int, tm: dict) -> Step:
 def _agent_step(m: dict, i: int, windows: dict) -> Step:
     """An AI turn plus the tool calls it issued, resolved to their results.
 
-    A turn with tool calls is a "reasoning" step; one without is the branch's
-    answer. ``invalid_tool_calls`` is always empty in this corpus, so it is ignored.
+    A turn without tool calls is the branch's answer. A turn *with* them is only
+    called "Reasoning" when the model actually said something: 78% of the time it
+    emits no prose at all and just dispatches a tool, and labelling those
+    "Reasoning" is simply wrong. ``invalid_tool_calls`` is always empty in this
+    corpus, so it is ignored.
     """
     tcs = m.get("tool_calls") or []
-    st = Step(
-        kind=K_AGENT if tcs else K_ANSWER,
-        label="Reasoning" if tcs else "Answer",
-        idx=i,
-        content=content_text(m.get("content")),
-        meta=_ai_meta(m),
-    )
+    text = content_text(m.get("content"))
+    if not tcs:
+        kind, label = K_ANSWER, "Answer"
+    elif text.strip():
+        kind, label = K_AGENT, "Reasoning"
+    else:
+        kind, label = K_AGENT, "Tool call"
+    st = Step(kind=kind, label=label, idx=i, content=text, meta=_ai_meta(m))
     if st.meta.get("finish_reason") == "length":
         st.status, st.tag = WARN, "truncated"
 
