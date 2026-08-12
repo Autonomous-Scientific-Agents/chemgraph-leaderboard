@@ -29,8 +29,11 @@ class ColumnContent:
 # Column groups (order = display order):
 #   1) Identity:  rank (T), Model, Model Family
 #   2) Overall:   Average ⬆️
-#   3) Trends:    1-Day, 3-Day Avg, 7-Day Avg
-#   4) Per-task:  12 task category accuracies (added dynamically below)
+#   3) Per-task:  12 task category accuracies (added dynamically below)
+#
+# NOTE: the column-selector's "Data" group is built in JS as *everything that is
+# not a task column* (css_html_js.py, TASK_COLS), and it locates the selector by
+# seeding on a label starting with "Average" — so keep Average ⬆️ here.
 class AutoEvalColumn:
     # --- Identity ---
     rank = ColumnContent("T", "number", True, never_hidden=True)
@@ -40,10 +43,6 @@ class AutoEvalColumn:
     model_family = ColumnContent("Model Family", "str", False, hidden=True)
     # --- Overall score ---
     average = ColumnContent("Average ⬆️", "number", True)
-    # --- Trend columns (1-day, 3-day, 7-day rolling averages) ---
-    one_day = ColumnContent("1-Day", "number", True)
-    three_day_avg = ColumnContent("3-Day Avg", "number", True)
-    seven_day_avg = ColumnContent("7-Day Avg", "number", True)
 
 
 # --- Per-task category columns (12) ---

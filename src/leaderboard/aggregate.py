@@ -112,6 +112,11 @@ def build_trend_summary(
 ) -> pd.DataFrame:
     """Build a summary DataFrame with 1-day, 3-day, and 7-day average scores.
 
+    NOTE: currently has no callers. The leaderboard's 1-Day / 3-Day Avg / 7-Day
+    Avg columns were removed (they were blank whenever the newest results fell
+    outside the window), and the Trends tab computes its own window stats. Kept
+    as the building block for a future Trends summary table.
+
     Parameters
     ----------
     eval_results : list[EvalResult]
@@ -160,28 +165,3 @@ def build_trend_summary(
         )
 
     return pd.DataFrame(rows)
-
-
-def build_leaderboard_trend_columns(
-    eval_results: list[EvalResult],
-    reference_date: Optional[datetime] = None,
-) -> dict[str, dict[str, float | None]]:
-    """Compute trend columns keyed by model name for merging into the leaderboard DF.
-
-    Returns
-    -------
-    dict
-        ``{full_model: {"1-Day": val, "3-Day Avg": val, "7-Day Avg": val}}``
-    """
-    summary = build_trend_summary(eval_results, reference_date)
-    if summary.empty:
-        return {}
-
-    result = {}
-    for _, row in summary.iterrows():
-        result[row["Model"]] = {
-            "1-Day": row["1-Day"],
-            "3-Day Avg": row["3-Day Avg"],
-            "7-Day Avg": row["7-Day Avg"],
-        }
-    return result

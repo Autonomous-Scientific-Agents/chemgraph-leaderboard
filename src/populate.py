@@ -6,21 +6,45 @@ import pandas as pd
 from src.display.formatting import has_no_nan_values, make_clickable_model
 from src.display.utils import AutoEvalColumn, EvalQueueColumn
 from src.envs import WORKFLOWS, get_eval_results_path, get_eval_requests_path
-from src.leaderboard.aggregate import (
-    build_leaderboard_trend_columns,
-    build_trend_summary,
-    get_history_df,
-)
+from src.leaderboard.aggregate import build_trend_summary, get_history_df
+from src.leaderboard.model_registry import current_models
 from src.leaderboard.read_evals import get_all_eval_results, get_raw_eval_results
+
+
+def _apply_current_model_filter(raw_data: list, results_path: str) -> list:
+    """Keep only models on the curated roster (``dataset/current_models.json``).
+
+    Applied to the raw ``EvalResult`` list — BEFORE ``to_dict()``, which wraps the
+    name in a markdown anchor, and before the rank renumbering below, so ranks
+    come out contiguous 1..N over the visible rows.
+
+    Fails open: no usable roster -> ``raw_data`` unchanged. Deliberately NOT
+    applied to the Trends tab, which shows the full history including retired
+    models (see ``get_combined_trend_history_df``).
+    """
+    roster = current_models()
+    if roster is None:
+        return raw_data
+
+    label = os.path.basename(os.path.normpath(results_path)) or results_path
+    present = {str(r.full_model).strip().lower() for r in raw_data}
+    kept = [r for r in raw_data if str(r.full_model).strip().lower() in roster]
+    print(f"Current-model filter [{label}]: kept {len(kept)}/{len(raw_data)} models")
+
+    missing = sorted(roster[k] for k in set(roster) - present)
+    if missing:
+        print(f"  NOTE [{label}]: {len(missing)} listed model(s) have no results yet: " + ", ".join(missing))
+    return kept
 
 
 def get_leaderboard_df(results_path: str, requests_path: str, cols: list, benchmark_cols: list) -> pd.DataFrame:
     """Creates a dataframe from all the individual experiment results.
 
-    Includes 1-Day, 3-Day Avg, and 7-Day Avg trend columns when
-    historical (date-indexed) evaluation data is available.
+    Restricted to the curated current-model roster — see
+    ``_apply_current_model_filter``.
     """
     raw_data = get_raw_eval_results(results_path, requests_path)
+    raw_data = _apply_current_model_filter(raw_data, results_path)
     all_data_json = [v.to_dict() for v in raw_data]
 
     if not all_data_json:
@@ -30,24 +54,6 @@ def get_leaderboard_df(results_path: str, requests_path: str, cols: list, benchm
         return pd.DataFrame(columns=cols)
 
     df = pd.DataFrame.from_records(all_data_json)
-
-    # --- Merge trend columns from full history ---
-    all_history = get_all_eval_results(results_path, requests_path)
-    trend_map = build_leaderboard_trend_columns(all_history)
-
-    if trend_map:
-        # Map from full_model stored in raw_data to trend values.
-        # The df uses the "eval_name" hidden column; we need to match
-        # via the full_model that was used to build trend_map.
-        model_lookup = {v.eval_name: v.full_model for v in raw_data}
-        for col_name in ("1-Day", "3-Day Avg", "7-Day Avg"):
-            df[col_name] = df["eval_name"].map(
-                lambda en, c=col_name: trend_map.get(model_lookup.get(en, ""), {}).get(c)
-            )
-    else:
-        for col_name in ("1-Day", "3-Day Avg", "7-Day Avg"):
-            df[col_name] = None
-
     df = df.sort_values(by=[AutoEvalColumn.average.name], ascending=False)
     df[AutoEvalColumn.rank.name] = range(1, len(df) + 1)
     df = df[cols].round(decimals=2)

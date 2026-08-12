@@ -1,0 +1,48 @@
+{
+  "_meta": {
+    "purpose": "Models shown in the Full table and the Highlights KPI strip / efficiency frontier. Anything evaluated but not listed here is hidden from those views.",
+    "not_applied_to": "The Trends tab. Trends intentionally show the FULL history, including retired models -- do not filter it.",
+    "keys": "org/model, matching EvalResult.full_model. Matched case-insensitively, whitespace-trimmed.",
+    "source_of_truth": "Hand-maintained mirror of scripts/daily_eval.sh MODELS (argo:* names resolved through dataset/model_map.json) and scripts/alcf_Eval.sh MODELS. Update this file whenever either roster changes -- nothing does it automatically.",
+    "on_error": "Missing, unparseable, or empty -> NO filtering (fail open), with a WARNING in the Space log. A typo must never blank the leaderboard.",
+    "updated": "2026-08-12"
+  },
+  "models": {
+    "argo": [
+      "anthropic/claude-opus-4.8",
+      "anthropic/claude-opus-4.7",
+      "anthropic/claude-sonnet-5",
+      "anthropic/claude-sonnet-4.6",
+      "anthropic/claude-sonnet-4.5",
+      "anthropic/claude-4.5-haiku",
+      "openai/gpt-5.6-sol",
+      "openai/gpt-5.6-terra",
+      "openai/gpt-5.6-luna",
+      "openai/gpt-5.5",
+      "openai/gpt-5.4",
+      "openai/gpt-4.1",
+      "openai/gpt-4.1-mini",
+      "openai/gpt-4o",
+      "openai/o3",
+      "openai/o3-mini",
+      "openai/o4-mini",
+      "google/gemini-3.5-flash",
+      "google/gemini-2.5-pro",
+      "google/gemini-2.5-flash"
+    ],
+    "alcf_open_weight": [
+      "google/gemma-4-31B-it",
+      "google/gemma-4-E4B-it",
+      "google/gemma-4-26B-A4B-it",
+      "google/gemma-3-27b-it",
+      "openai/gpt-oss-120b",
+      "openai/gpt-oss-20b",
+      "meta-llama/Llama-3.3-70B-Instruct",
+      "meta-llama/Llama-4-Scout-17B-16E-Instruct",
+      "meta-llama/Meta-Llama-3.1-70B-Instruct",
+      "meta-llama/Meta-Llama-3.1-405B-Instruct",
+      "nvidia/nemotron-3-super-120b",
+      "nvidia/nemotron-3-ultra"
+    ]
+  }
+}
