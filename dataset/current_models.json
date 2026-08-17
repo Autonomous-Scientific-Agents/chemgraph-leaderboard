@@ -5,7 +5,7 @@
     "keys": "org/model, matching EvalResult.full_model. Matched case-insensitively, whitespace-trimmed.",
     "source_of_truth": "Hand-maintained mirror of scripts/daily_eval.sh MODELS (argo:* names resolved through dataset/model_map.json) and scripts/alcf_Eval.sh MODELS. Update this file whenever either roster changes -- nothing does it automatically.",
     "on_error": "Missing, unparseable, or empty -> NO filtering (fail open), with a WARNING in the Space log. A typo must never blank the leaderboard.",
-    "updated": "2026-08-12"
+    "updated": "2026-08-17"
   },
   "models": {
     "argo": [
@@ -42,7 +42,8 @@
       "meta-llama/Meta-Llama-3.1-70B-Instruct",
       "meta-llama/Meta-Llama-3.1-405B-Instruct",
       "nvidia/nemotron-3-super-120b",
-      "nvidia/nemotron-3-ultra"
+      "nvidia/nemotron-3-ultra",
+      "thinkingmachines/Inkling"
     ]
   }
 }

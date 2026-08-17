@@ -709,8 +709,10 @@ _HIGHLIGHT_LABEL = {"best": "Best overall", "open": "Best open-weight",
 # series missing from this tuple is silently treated as proprietary and can
 # never win that card.
 # (openai/gpt-oss-* is open even though its org "openai" also has closed models.)
+# "inkling" is safe as a substring: its own org "thinkingmachines" does not
+# contain it ("thinking" has "inki", not "inkl").
 _OPEN_SOURCE_PATTERNS = ("gemma", "llama", "nemotron", "gpt-oss",
-                         "mistral", "mixtral", "qwen", "deepseek")
+                         "mistral", "mixtral", "qwen", "deepseek", "inkling")
 _MARKER_CLOSED = "circle"   # proprietary
 _MARKER_OPEN = "diamond"    # open-weight
 
@@ -1065,7 +1067,7 @@ def build_efficiency_frontier(leaderboard_df: pd.DataFrame, metrics_df: pd.DataF
 
     palette = {"openai": "#10a37f", "anthropic": "#d97757", "google": "#4285f4",
                "meta-llama": "#7c3aed", "nvidia": "#ca8a04", "mistralai": "#e11d48",
-               "deepseek": "#0891b2", "qwen": "#db2777"}
+               "deepseek": "#0891b2", "qwen": "#db2777", "thinkingmachines": "#15803d"}
     # Color = org/family; marker shape = open-weight (diamond) vs proprietary (circle).
     # Real points are hidden from the legend; a custom grouped legend is built below.
     for fam, grp in pts.groupby("family"):
