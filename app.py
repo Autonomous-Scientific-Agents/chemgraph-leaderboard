@@ -830,8 +830,13 @@ def _highlight_picks(base: pd.DataFrame) -> dict:
 _KPI_DESC = {
     "best": "Highest average accuracy across all 12 tasks. Ties broken by fewer "
             "tokens per query.",
-    "open": "Highest average accuracy among open-weight models (gemma / llama / "
-            "nemotron / gpt-oss / qwen / deepseek / mistral series). These run on "
+    # Deliberately does NOT enumerate the open series. _OPEN_SOURCE_PATTERNS is
+    # forward-looking (it carries qwen/deepseek/mistral so those classify
+    # correctly if we ever run them), so any list copied from it here is wrong in
+    # both directions at once — it named three series we don't run while missing
+    # one we do. The frontier's diamond markers already show which models these
+    # are.
+    "open": "Highest average accuracy among open-weight models. These run on "
             "ANL ALCF hardware rather than a paid API, so they carry no dollar "
             "cost and never win 'Cheapest ($)'. Ties broken by fewer tokens per "
             "query.",
